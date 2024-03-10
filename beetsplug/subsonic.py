@@ -177,7 +177,7 @@ class SubsonicPlugin(BeetsPlugin):
 
     def subsonic_get_ids(self, items):
         for item in items:
-            if not item.subsonic_id:
+            if not hasattr(item, 'subsonic_id'):
                 item.subsonic_id = self.get_song_id(item)
                 # item.store()
 
