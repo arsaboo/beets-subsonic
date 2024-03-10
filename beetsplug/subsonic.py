@@ -57,15 +57,24 @@ class SubsonicPlugin(BeetsPlugin):
             "subsonicaddrating", help=f"Add ratings to {self.data_source} library"
         )
 
+        subsonic_get_ids_cmd.parser.add_option(
+            "-f",
+            "--force",
+            dest="force_refetch",
+            action="store_true",
+            default=False,
+            help="Force rating update",
+        )
+
         def func_add_rating(lib, opts, args):
             items = lib.items(ui.decargs(args))
-            self.subsonic_add_rating(items)
+            self.subsonic_add_rating(items, opts.force_refetch)
 
         subsonicaddrating_cmd.func = func_add_rating
 
         # get subsonic ids
         subsonic_get_ids_cmd = ui.Subcommand(
-            "subsonicgetids", help=f"Get Subsonic ids for items"
+            "subsonicgetids", help=f"Get subsonic_id for items"
         )
 
         subsonic_get_ids_cmd.parser.add_option(
@@ -74,7 +83,7 @@ class SubsonicPlugin(BeetsPlugin):
             dest="force_refetch",
             action="store_true",
             default=False,
-            help="Force Subsonic id update",
+            help="Force subsonic_id update",
         )
 
         def func_get_ids(lib, opts, args):
@@ -233,3 +242,29 @@ class SubsonicPlugin(BeetsPlugin):
             self._log.error(
                 f"Error: {error}: {item.album} - {item.artist} - {item.title}"
             )
+
+    def subsonic_add_rating(self, items, force):
+        url = self.__format_url("setRating")
+        payload = self.authenticate()
+        if payload is None:
+            return
+
+        for item in items:
+            if not hasattr(item, "subsonic_id"):
+                self.get_song_id(item)
+            plex_user_rating = item.plex_user_rating
+            if plex_user_rating is None:
+                self._log.debug("No rating found for: {}", item)
+                continue
+            response = requests.get(
+                url, params={**payload, "id": item.subsonic_id, "rating": int(int(plex_user_rating)/2)}
+            )
+            json = response.json()
+            if (
+                response.status_code == 200
+                and json["subsonic-response"]["status"] == "ok"
+            ):
+                self._log.info(f"Rating updated for {item}: {int(int(plex_user_rating)/2)}")
+            else:
+                self._log.error(f"Error: {json}")
+
