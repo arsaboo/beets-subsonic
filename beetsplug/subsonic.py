@@ -157,6 +157,7 @@ class SubsonicPlugin(BeetsPlugin):
         return payload
 
     def start_scan(self):
+        """Start a scan of the Subsonic library."""
         url = self.__format_url("startScan")
         self._log.debug("URL is {0}", url)
         self._log.debug("auth type is {0}", config["subsonic"]["auth"])
