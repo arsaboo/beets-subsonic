@@ -257,14 +257,20 @@ class SubsonicPlugin(BeetsPlugin):
                 self._log.debug("No rating found for: {}", item)
                 continue
             response = requests.get(
-                url, params={**payload, "id": item.subsonic_id, "rating": int(int(plex_userrating)/2)}
+                url,
+                params={
+                    **payload,
+                    "id": item.subsonic_id,
+                    "rating": int(int(plex_userrating) / 2),
+                },
             )
             json = response.json()
             if (
                 response.status_code == 200
                 and json["subsonic-response"]["status"] == "ok"
             ):
-                self._log.info(f"Rating updated for {item}: {int(int(plex_userrating)/2)}")
+                self._log.info(
+                    f"Rating updated for {item}: {int(int(plex_userrating)/2)}"
+                )
             else:
                 self._log.error(f"Error: {json}")
-
