@@ -57,7 +57,7 @@ class SubsonicPlugin(BeetsPlugin):
             "subsonicaddrating", help=f"Add ratings to {self.data_source} library"
         )
 
-        subsonic_get_ids_cmd.parser.add_option(
+        subsonicaddrating_cmd.parser.add_option(
             "-f",
             "--force",
             dest="force_refetch",
