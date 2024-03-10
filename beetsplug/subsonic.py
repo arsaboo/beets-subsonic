@@ -189,7 +189,7 @@ class SubsonicPlugin(BeetsPlugin):
             self._log.error(f"Error: {error}")
 
     def subsonic_get_ids(self, items, force):
-        """ Get subsonic_id for items"""
+        """Get subsonic_id for items"""
         with ThreadPoolExecutor() as executor:
             for item in items:
                 if not force and "subsonic_id" in item:
@@ -286,27 +286,27 @@ class SubsonicPlugin(BeetsPlugin):
         else:
             self._log.error(f"Error: {json}")
 
-    # def subsonic_add_rating(self, items):
-    #     url = self.__format_url("setRating")
-    #     payload = self.authenticate()
-    #     if payload is None:
-    #         return
-
-    #     with ThreadPoolExecutor() as executor:
-    #         list(
-    #             tqdm(
-    #                 executor.map(
-    #                     lambda item: self.update_rating(item, url, payload), items
-    #                 ),
-    #                 total=len(items),
-    #             )
-    #         )
-
     def subsonic_add_rating(self, items):
         url = self.__format_url("setRating")
         payload = self.authenticate()
         if payload is None:
             return
 
-        for item in tqdm(items, total=len(items)):
-            self.update_rating(item, url, payload)
+        with ThreadPoolExecutor(max_workers=3) as executor:
+            list(
+                tqdm(
+                    executor.map(
+                        lambda item: self.update_rating(item, url, payload), items
+                    ),
+                    total=len(items),
+                )
+            )
+
+    # def subsonic_add_rating(self, items):
+    #     url = self.__format_url("setRating")
+    #     payload = self.authenticate()
+    #     if payload is None:
+    #         return
+
+    #     for item in tqdm(items, total=len(items)):
+    #         self.update_rating(item, url, payload)
