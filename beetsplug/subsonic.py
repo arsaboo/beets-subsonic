@@ -263,6 +263,8 @@ class SubsonicPlugin(BeetsPlugin):
 
         if not hasattr(item, "subsonic_id"):
             id = self.get_song_id(item)
+        else:
+            id = item.subsonic_id
         try:
             plex_userrating = item.plex_userrating
         except AttributeError:
