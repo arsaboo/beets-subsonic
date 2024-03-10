@@ -33,3 +33,12 @@ The available options under the ``subsonic:`` section are:
 - **auth**: The authentication method. Possible choices are ``token`` or
   ``password``. ``token`` authentication is preferred to avoid sending
   cleartext password.
+
+## Features
+
+- **Get subsonic_id**: You can use `beet subsonicgetids` function to retrieve the Subsonic IDs for all songs in your beets library and stores them for future use. You can add the `-f` flag to force-update the ids in your library. You can use the default beets queries format to limit the items to be updated.
+
+- **Update Rating**: You can sync your song ratings from your Beets library to your Subsonic server. Right now, it only uses `plex_userrating` (but I am planning to make that configurable). Use `beet subsonicaddrating` to update the ratings. You can use the default beets queries format to limit the items to be updated.
+
+- **Trigger Subsonic update**: You can use `beet subsonicupdate` to manually trigger a scan.
+

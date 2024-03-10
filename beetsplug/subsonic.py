@@ -152,7 +152,7 @@ class SubsonicPlugin(BeetsPlugin):
                 "f": "json",
             }
         else:
-            return None
+            raise ValueError(f"Invalid authentication method: {auth}")
 
         return payload
 
@@ -161,8 +161,10 @@ class SubsonicPlugin(BeetsPlugin):
         self._log.debug("URL is {0}", url)
         self._log.debug("auth type is {0}", config["subsonic"]["auth"])
 
-        payload = self.authenticate()
-        if payload is None:
+        try:
+            payload = self.authenticate()
+        except ValueError as e:
+            self._log.error(f"Authentication failed: {e}")
             return
 
         try:
@@ -187,6 +189,7 @@ class SubsonicPlugin(BeetsPlugin):
             self._log.error(f"Error: {error}")
 
     def subsonic_get_ids(self, items, force):
+        """ Get subsonic_id for items"""
         with ThreadPoolExecutor() as executor:
             for item in items:
                 if not force and "subsonic_id" in item:
@@ -198,6 +201,16 @@ class SubsonicPlugin(BeetsPlugin):
                     item.store()
 
     def get_song_id(self, item):
+        """
+        Retrieves the ID of a song from the Subsonic server based on the provided item.
+
+        Args:
+            item: The item object representing the song.
+
+        Returns:
+            The ID of the song if found, None otherwise.
+        """
+
         url = self.__format_url("search3")
         payload = self.authenticate()
         if payload is None:
@@ -236,6 +249,21 @@ class SubsonicPlugin(BeetsPlugin):
             )
 
     def update_rating(self, item, url, payload):
+        """
+        Update the rating of an item on the Subsonic server.
+
+        Args:
+            item: The item to update the rating for.
+            url: The URL of the Subsonic server.
+            payload: Additional parameters to include in the request.
+
+        Returns:
+            None
+
+        Raises:
+            None
+        """
+
         if not hasattr(item, "subsonic_id"):
             id = self.get_song_id(item)
         try:
