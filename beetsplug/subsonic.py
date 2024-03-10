@@ -9,11 +9,14 @@ from binascii import hexlify
 
 import requests
 
-from beets import config
+from beets import config, ui
 from beets.plugins import BeetsPlugin
 
 
 class SubsonicPlugin(BeetsPlugin):
+
+    data_source = "Subsonic"
+
     def __init__(self):
         super().__init__()
         # Set default configuration values
@@ -34,6 +37,18 @@ class SubsonicPlugin(BeetsPlugin):
 
     def spl_update(self):
         self.register_listener("cli_exit", self.start_scan)
+
+    def commands(self):
+        """Add beet UI commands to interact with Subsonic."""
+        subsonicupdate_cmd = ui.Subcommand(
+            "subsonicupdate", help=f"Update {self.data_source} library"
+        )
+
+        def func(lib, opts, args):
+            self.start_scan()
+
+        subsonicupdate_cmd.func = func
+        return [subsonicupdate_cmd]
 
     @staticmethod
     def __create_token():
