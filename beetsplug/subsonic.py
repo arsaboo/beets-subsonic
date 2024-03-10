@@ -14,6 +14,7 @@ from beets.plugins import BeetsPlugin
 from concurrent.futures import ThreadPoolExecutor
 from tqdm import tqdm
 
+
 class SubsonicPlugin(BeetsPlugin):
 
     data_source = "Subsonic"
@@ -234,35 +235,40 @@ class SubsonicPlugin(BeetsPlugin):
                 f"Error: {error}: {item.album} - {item.artist} - {item.title}"
             )
 
+    def update_rating(self, item, url, payload):
+        if not hasattr(item, "subsonic_id"):
+            id = self.get_song_id(item)
+        try:
+            plex_userrating = item.plex_userrating
+        except AttributeError:
+            self._log.debug("No rating found for: {}", item)
+            return
+        response = requests.get(
+            url,
+            params={
+                **payload,
+                "id": id,
+                "rating": int(int(plex_userrating) / 2),
+            },
+        )
+        json = response.json()
+        if response.status_code == 200 and json["subsonic-response"]["status"] == "ok":
+            self._log.debug(f"Rating updated for {item}: {int(int(plex_userrating)/2)}")
+        else:
+            self._log.error(f"Error: {json}")
+
     def subsonic_add_rating(self, items):
         url = self.__format_url("setRating")
         payload = self.authenticate()
         if payload is None:
             return
 
-        for item in tqdm(items, desc="Processing items", unit="item"):
-            if not hasattr(item, "subsonic_id"):
-                id = self.get_song_id(item)
-            try:
-                plex_userrating = item.plex_userrating
-            except AttributeError:
-                self._log.debug("No rating found for: {}", item)
-                continue
-            response = requests.get(
-                url,
-                params={
-                    **payload,
-                    "id": id,
-                    "rating": int(int(plex_userrating) / 2),
-                },
-            )
-            json = response.json()
-            if (
-                response.status_code == 200
-                and json["subsonic-response"]["status"] == "ok"
-            ):
-                self._log.debug(
-                    f"Rating updated for {item}: {int(int(plex_userrating)/2)}"
+        with ThreadPoolExecutor() as executor:
+            list(
+                tqdm(
+                    executor.map(
+                        lambda item: self.update_rating(item, url, payload), items
+                    ),
+                    total=len(items),
                 )
-            else:
-                self._log.error(f"Error: {json}")
+            )
