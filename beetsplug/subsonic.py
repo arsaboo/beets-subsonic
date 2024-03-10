@@ -166,7 +166,7 @@ class SubsonicPlugin(BeetsPlugin):
             return
 
         try:
-            response = requests.get(url, params=payload)
+            response = requests.get(url, params=payload, timeout=5.0)
             json = response.json()
 
             if (
@@ -208,7 +208,7 @@ class SubsonicPlugin(BeetsPlugin):
             query = f"{item.album} {item.title}"
         try:
             response = requests.get(
-                url, params={**payload, "query": query, "songCount": 1}
+                url, params={**payload, "query": query, "songCount": 1}, timeout=5.0
             )
             json = response.json()
             if (
@@ -250,6 +250,7 @@ class SubsonicPlugin(BeetsPlugin):
                 "id": id,
                 "rating": int(int(plex_userrating) / 2),
             },
+            timeout=5.0,
         )
         json = response.json()
         if response.status_code == 200 and json["subsonic-response"]["status"] == "ok":
