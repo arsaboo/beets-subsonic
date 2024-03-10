@@ -57,24 +57,15 @@ class SubsonicPlugin(BeetsPlugin):
             "subsonicaddrating", help=f"Add ratings to {self.data_source} library"
         )
 
-        subsonicaddrating_cmd.parser.add_option(
-            "-f",
-            "--force",
-            dest="force_refetch",
-            action="store_true",
-            default=False,
-            help="Force rating update",
-        )
-
         def func_add_rating(lib, opts, args):
             items = lib.items(ui.decargs(args))
-            self.subsonic_add_rating(items, opts.force_refetch)
+            self.subsonic_add_rating(items)
 
         subsonicaddrating_cmd.func = func_add_rating
 
         # get subsonic ids
         subsonic_get_ids_cmd = ui.Subcommand(
-            "subsonicgetids", help=f"Get subsonic_id for items"
+            "subsonicgetids", help="Get subsonic_id for items"
         )
 
         subsonic_get_ids_cmd.parser.add_option(
@@ -203,7 +194,7 @@ class SubsonicPlugin(BeetsPlugin):
                 if not hasattr(item, "subsonic_id"):
                     future = executor.submit(self.get_song_id, item)
                     item.subsonic_id = future.result()
-                    # item.store()
+                    item.store()
 
     def get_song_id(self, item):
         url = self.__format_url("search3")
@@ -243,7 +234,7 @@ class SubsonicPlugin(BeetsPlugin):
                 f"Error: {error}: {item.album} - {item.artist} - {item.title}"
             )
 
-    def subsonic_add_rating(self, items, force):
+    def subsonic_add_rating(self, items):
         url = self.__format_url("setRating")
         payload = self.authenticate()
         if payload is None:
