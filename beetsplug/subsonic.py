@@ -257,18 +257,27 @@ class SubsonicPlugin(BeetsPlugin):
         else:
             self._log.error(f"Error: {json}")
 
+    # def subsonic_add_rating(self, items):
+    #     url = self.__format_url("setRating")
+    #     payload = self.authenticate()
+    #     if payload is None:
+    #         return
+
+    #     with ThreadPoolExecutor() as executor:
+    #         list(
+    #             tqdm(
+    #                 executor.map(
+    #                     lambda item: self.update_rating(item, url, payload), items
+    #                 ),
+    #                 total=len(items),
+    #             )
+    #         )
+
     def subsonic_add_rating(self, items):
         url = self.__format_url("setRating")
         payload = self.authenticate()
         if payload is None:
             return
 
-        with ThreadPoolExecutor() as executor:
-            list(
-                tqdm(
-                    executor.map(
-                        lambda item: self.update_rating(item, url, payload), items
-                    ),
-                    total=len(items),
-                )
-            )
+        for item in tqdm(items, total=len(items)):
+            self.update_rating(item, url, payload)
