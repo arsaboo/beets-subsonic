@@ -11,6 +11,7 @@ import requests
 
 from beets import config, ui
 from beets.plugins import BeetsPlugin
+from concurrent.futures import ThreadPoolExecutor
 
 
 class SubsonicPlugin(BeetsPlugin):
@@ -67,9 +68,18 @@ class SubsonicPlugin(BeetsPlugin):
             "subsonicgetids", help=f"Get Subsonic ids for items"
         )
 
+        subsonic_get_ids_cmd.parser.add_option(
+            "-f",
+            "--force",
+            dest="force_refetch",
+            action="store_true",
+            default=False,
+            help="Force Subsonic id update",
+        )
+
         def func_get_ids(lib, opts, args):
             items = lib.items(ui.decargs(args))
-            self.subsonic_get_ids(items)
+            self.subsonic_get_ids(items, opts.force_refetch)
 
         subsonic_get_ids_cmd.func = func_get_ids
 
@@ -175,11 +185,16 @@ class SubsonicPlugin(BeetsPlugin):
         except Exception as error:
             self._log.error(f"Error: {error}")
 
-    def subsonic_get_ids(self, items):
-        for item in items:
-            if not hasattr(item, "subsonic_id"):
-                item.subsonic_id = self.get_song_id(item)
-                # item.store()
+    def subsonic_get_ids(self, items, force):
+        with ThreadPoolExecutor() as executor:
+            for item in items:
+                if not force and "subsonic_id" in item:
+                    self._log.debug("subsonic_id already present for: {}", item)
+                    continue
+                if not hasattr(item, "subsonic_id"):
+                    future = executor.submit(self.get_song_id, item)
+                    item.subsonic_id = future.result()
+                    # item.store()
 
     def get_song_id(self, item):
         url = self.__format_url("search3")
@@ -215,4 +230,6 @@ class SubsonicPlugin(BeetsPlugin):
                     item.title,
                 )
         except Exception as error:
-            self._log.error(f"Error: {error}: {item.album} - {item.artist} - {item.title}")
+            self._log.error(
+                f"Error: {error}: {item.album} - {item.artist} - {item.title}"
+            )
