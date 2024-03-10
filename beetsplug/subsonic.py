@@ -12,7 +12,7 @@ import requests
 from beets import config, ui
 from beets.plugins import BeetsPlugin
 from concurrent.futures import ThreadPoolExecutor
-
+from tqdm import tqdm
 
 class SubsonicPlugin(BeetsPlugin):
 
@@ -240,7 +240,7 @@ class SubsonicPlugin(BeetsPlugin):
         if payload is None:
             return
 
-        for item in items:
+        for item in tqdm(items, desc="Processing items", unit="item"):
             if not hasattr(item, "subsonic_id"):
                 id = self.get_song_id(item)
             try:
