@@ -252,8 +252,9 @@ class SubsonicPlugin(BeetsPlugin):
         for item in items:
             if not hasattr(item, "subsonic_id"):
                 id = self.get_song_id(item)
-            plex_userrating = item.plex_userrating
-            if plex_userrating is None:
+            try:
+                plex_userrating = item.plex_userrating
+            except AttributeError:
                 self._log.debug("No rating found for: {}", item)
                 continue
             response = requests.get(
