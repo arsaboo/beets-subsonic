@@ -190,8 +190,8 @@ class SubsonicPlugin(BeetsPlugin):
 
     def subsonic_get_ids(self, items, force):
         """Get subsonic_id for items"""
-        with ThreadPoolExecutor() as executor:
-            for item in items:
+        with ThreadPoolExecutor(max_workers=3) as executor:
+            for item in tqdm(items, total=len(items)):
                 if not force and "subsonic_id" in item:
                     self._log.debug("subsonic_id already present for: {}", item)
                     continue
