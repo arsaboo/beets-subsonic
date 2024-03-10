@@ -295,6 +295,22 @@ class SubsonicPlugin(BeetsPlugin):
         """Transform rating from beets to subsonic rating"""
         if rating_field == "plex_userrating":
             return int(int(rating) / 2)
+        elif rating_field == "spotify_track_popularity":
+            popularity = float(rating)
+            if popularity < 16.66:
+                return 0
+            elif popularity < 33.33:
+                return 1
+            elif popularity < 50:
+                return 2
+            elif popularity < 66.66:
+                return 3
+            elif popularity < 83.33:
+                return 4
+            else:
+                return 5
+        else:
+            return int(rating)
 
     def subsonic_add_rating(self, items, rating_field):
         url = self.__format_url("setRating")
