@@ -40,6 +40,8 @@ class SubsonicPlugin(BeetsPlugin):
 
     def commands(self):
         """Add beet UI commands to interact with Subsonic."""
+
+        # Subsonic update command
         subsonicupdate_cmd = ui.Subcommand(
             "subsonicupdate", help=f"Update {self.data_source} library"
         )
@@ -48,7 +50,30 @@ class SubsonicPlugin(BeetsPlugin):
             self.start_scan()
 
         subsonicupdate_cmd.func = func
-        return [subsonicupdate_cmd]
+
+        # Subsonic rating update command
+        subsonicaddrating_cmd = ui.Subcommand(
+            "subsonicaddrating", help=f"Add ratings to {self.data_source} library"
+        )
+
+        def func_add_rating(lib, opts, args):
+            items = lib.items(ui.decargs(args))
+            self.subsonic_add_rating(items)
+
+        subsonicaddrating_cmd.func = func_add_rating
+
+        # get subsonic ids
+        subsonic_get_ids_cmd = ui.Subcommand(
+            "subsonicgetids", help=f"Get Subsonic ids for items"
+        )
+
+        def func_get_ids(lib, opts, args):
+            items = lib.items(ui.decargs(args))
+            self.subsonic_get_ids(items)
+
+        subsonic_get_ids_cmd.func = func_get_ids
+
+        return [subsonicupdate_cmd, subsonicaddrating_cmd, subsonic_get_ids_cmd]
 
     @staticmethod
     def __create_token():
@@ -145,6 +170,42 @@ class SubsonicPlugin(BeetsPlugin):
             ):
                 error_message = json["subsonic-response"]["error"]["message"]
                 self._log.error(f"Error: {error_message}")
+            else:
+                self._log.error("Error: {0}", json)
+        except Exception as error:
+            self._log.error(f"Error: {error}")
+
+    def subsonic_get_ids(self, items):
+        for item in items:
+            if not item.subsonic_id:
+                item.subsonic_id = self.get_song_id(item)
+                # item.store()
+
+    def get_song_id(self, item):
+        url = self.__format_url("search3")
+        payload = self.authenticate()
+        if payload is None:
+            return None
+        if item.album == item.title:
+            query = f"{item.title} {item.artist}"
+        else:
+            query = f"{item.album} {item.title}"
+        try:
+            response = requests.get(
+                url, params={**payload, "query": query, "songCount": 1}
+            )
+            json = response.json()
+            if (
+                response.status_code == 200
+                and json["subsonic-response"]["status"] == "ok"
+            ):
+                id = json["subsonic-response"]["searchResult3"]["song"][0]["id"]
+                album = json["subsonic-response"]["searchResult3"]["song"][0]["album"]
+                artist = json["subsonic-response"]["searchResult3"]["song"][0]["artist"]
+                title = json["subsonic-response"]["searchResult3"]["song"][0]["title"]
+                self._log.debug(
+                    f"{item.album} - {item.artist} - {item.title} matched with {id}: {album} - {artist} - {title}"
+                )
             else:
                 self._log.error("Error: {0}", json)
         except Exception as error:
