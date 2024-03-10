@@ -65,7 +65,11 @@ class SubsonicPlugin(BeetsPlugin):
             dest="rating",
             action="store_true",
             default="plex_userrating",
-            help="Specify the rating field to be used for updating Subsonic ratings. Default is plex_userrating.",
+            help=(
+                "Specify the rating field to be used for updating Subsonic ratings. "
+                "Default is plex_userrating. Options are plex_userrating, "
+                "spotify_track_popularity, and beets_rating."
+            ),
         )
 
         def func_add_rating(lib, opts, args):
@@ -239,13 +243,14 @@ class SubsonicPlugin(BeetsPlugin):
             query = f"{item.album} {item.title}"
         payload = {**payload, "query": query, "songCount": 1}
         json = self.send_request(url, payload)
-        if json and 'song' in json["subsonic-response"]["searchResult3"]:
+        if json and "song" in json["subsonic-response"]["searchResult3"]:
             id = json["subsonic-response"]["searchResult3"]["song"][0]["id"]
             album = json["subsonic-response"]["searchResult3"]["song"][0]["album"]
             artist = json["subsonic-response"]["searchResult3"]["song"][0]["artist"]
             title = json["subsonic-response"]["searchResult3"]["song"][0]["title"]
             self._log.debug(
-                f"{item.album} - {item.artist} - {item.title} matched with {id}: {album} - {artist} - {title}"
+                f"{item.album} - {item.artist} - {item.title} matched "
+                f"with {id}: {album} - {artist} - {title}"
             )
             return id
         else:
