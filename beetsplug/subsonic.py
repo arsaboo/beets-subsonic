@@ -47,7 +47,7 @@ class SubsonicPlugin(BeetsPlugin):
 
         # Subsonic update command
         subsonicupdate_cmd = ui.Subcommand(
-            "subsonicupdate", help=f"Update {self.data_source} library"
+            "subsonic_update", help=f"Update {self.data_source} library"
         )
 
         def func(lib, opts, args):
@@ -57,7 +57,7 @@ class SubsonicPlugin(BeetsPlugin):
 
         # Subsonic rating update command
         subsonicaddrating_cmd = ui.Subcommand(
-            "subsonicaddrating", help=f"Add ratings to {self.data_source} library"
+            "subsonic_addrating", help=f"Add ratings to {self.data_source} library"
         )
 
         subsonicaddrating_cmd.parser.add_option(
@@ -76,7 +76,7 @@ class SubsonicPlugin(BeetsPlugin):
 
         # get subsonic ids
         subsonic_get_ids_cmd = ui.Subcommand(
-            "subsonicgetids", help="Get subsonic_id for items"
+            "subsonic_getids", help="Get subsonic_id for items"
         )
 
         subsonic_get_ids_cmd.parser.add_option(

@@ -36,9 +36,9 @@ The available options under the ``subsonic:`` section are:
 
 ## Features
 
-- **Get subsonic_id**: You can use `beet subsonicgetids` function to retrieve the Subsonic IDs for all songs in your beets library and stores them for future use. You can add the `-f` flag to force-update the ids in your library. You can use the default beets queries format to limit the items to be updated.
+- **Get subsonic_id**: You can use `beet subsonic_getids` function to retrieve the Subsonic IDs for all songs in your beets library and stores them for future use. You can add the `-f` flag to force-update the ids in your library. You can use the default beets queries format to limit the items to be updated.
 
-- **Update Rating**: You can sync your song ratings from your Beets library to your Subsonic server. You can specify the rating field to be used, e.g., `beet subsonicaddrating --rating plex_userrating`. Right now, the default is `plex_userrating` and it is scaled accordingly. You can use the default beets queries format to limit the items to be updated.
+- **Update Rating**: You can sync your song ratings from your Beets library to your Subsonic server. You can specify the rating field to be used, e.g., `beet subsonic_addrating --rating plex_userrating`. Right now, the default is `plex_userrating` and it is scaled accordingly. You can use the default beets queries format to limit the items to be updated.
 
-- **Trigger Subsonic update**: You can use `beet subsonicupdate` to manually trigger a scan.
+- **Trigger Subsonic update**: You can use `beet subsonic_update` to manually trigger a scan.
 
