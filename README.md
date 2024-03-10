@@ -18,7 +18,7 @@ Add `Subsonic` to your list of enabled plugins.
 
 ```yaml
 subsonic:
-    url: https://example.com:443/subsonic
+    url: http://localhost:4533
     user: username
     pass: password
     auth: token
@@ -26,7 +26,7 @@ subsonic:
 
 The available options under the ``subsonic:`` section are:
 
-- **url**: The Subsonic server resource. Default: ``http://localhost:4040``
+- **url**: The Subsonic server resource. Default: ``http://localhost:4533``
 - **user**: The Subsonic user. Default: ``admin``
 - **pass**: The Subsonic user password. (This may either be a clear-text
   password or hex-encoded with the prefix ``enc:``.) Default: ``admin``

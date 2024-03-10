@@ -26,7 +26,7 @@ class SubsonicPlugin(BeetsPlugin):
             {
                 "user": "admin",
                 "pass": "admin",
-                "url": "http://localhost:4040",
+                "url": "http://localhost:4533",
                 "auth": "token",
             }
         )
