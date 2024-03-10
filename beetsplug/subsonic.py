@@ -67,8 +67,7 @@ class SubsonicPlugin(BeetsPlugin):
             default="plex_userrating",
             help=(
                 "Specify the rating field to be used for updating Subsonic ratings. "
-                "Default is plex_userrating. Options are plex_userrating, "
-                "spotify_track_popularity, and beets_rating."
+                "Default is plex_userrating."
             ),
         )
 
