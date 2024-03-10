@@ -177,7 +177,7 @@ class SubsonicPlugin(BeetsPlugin):
 
     def subsonic_get_ids(self, items):
         for item in items:
-            if not hasattr(item, 'subsonic_id'):
+            if not hasattr(item, "subsonic_id"):
                 item.subsonic_id = self.get_song_id(item)
                 # item.store()
 
@@ -206,7 +206,13 @@ class SubsonicPlugin(BeetsPlugin):
                 self._log.debug(
                     f"{item.album} - {item.artist} - {item.title} matched with {id}: {album} - {artist} - {title}"
                 )
+                return id
             else:
-                self._log.error("Error: {0}", json)
+                self._log.error(
+                    "Could not find {0} - {1} - {2}",
+                    item.album,
+                    item.artist,
+                    item.title,
+                )
         except Exception as error:
             self._log.error(f"Error: {error}")
