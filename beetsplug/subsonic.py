@@ -16,8 +16,10 @@ from tqdm import tqdm
 
 
 class SubsonicPlugin(BeetsPlugin):
+    """Subsonic plugin for Beets."""
 
     data_source = "Subsonic"
+    MAX_WORKERS = 3
 
     def __init__(self):
         super().__init__()
@@ -156,42 +158,49 @@ class SubsonicPlugin(BeetsPlugin):
 
         return payload
 
+    def send_request(self, url, payload):
+        try:
+            response = requests.get(url, params=payload, timeout=5.0)
+            response.raise_for_status()
+            json = response.json()
+            if json["subsonic-response"]["status"] == "ok":
+                return json
+            else:
+                error_message = json["subsonic-response"]["error"]["message"]
+                self._log.error(f"Error: {error_message}")
+                return None
+        except requests.exceptions.RequestException as error:
+            self._log.error(f"Error: {error}")
+            return None
+
     def start_scan(self):
         """Start a scan of the Subsonic library."""
-        url = self.__format_url("startScan")
-        self._log.debug("URL is {0}", url)
-        self._log.debug("auth type is {0}", config["subsonic"]["auth"])
-
         try:
             payload = self.authenticate()
         except ValueError as e:
             self._log.error(f"Authentication failed: {e}")
             return
 
-        try:
-            response = requests.get(url, params=payload, timeout=5.0)
-            json = response.json()
+        # get scan status
+        url = self.__format_url("getScanStatus")
+        self._log.debug("URL is {0}", url)
+        self._log.debug("auth type is {0}", config["subsonic"]["auth"])
+        json = self.send_request(url, payload)
+        if json and json["subsonic-response"]["scanStatus"]["scanning"]:
+            self._log.info("Subsonic is currently scanning")
+            return
 
-            if (
-                response.status_code == 200
-                and json["subsonic-response"]["status"] == "ok"
-            ):
-                count = json["subsonic-response"]["scanStatus"]["count"]
-                self._log.info(f"Updating Subsonic; scanning {count} tracks")
-            elif (
-                response.status_code == 200
-                and json["subsonic-response"]["status"] == "failed"
-            ):
-                error_message = json["subsonic-response"]["error"]["message"]
-                self._log.error(f"Error: {error_message}")
-            else:
-                self._log.error("Error: {0}", json)
-        except Exception as error:
-            self._log.error(f"Error: {error}")
+        url = self.__format_url("startScan")
+        self._log.debug("URL is {0}", url)
+        self._log.debug("auth type is {0}", config["subsonic"]["auth"])
+        json = self.send_request(url, payload)
+        if json:
+            count = json["subsonic-response"]["scanStatus"]["count"]
+            self._log.info(f"Updating Subsonic; scanning {count} tracks")
 
     def subsonic_get_ids(self, items, force):
         """Get subsonic_id for items"""
-        with ThreadPoolExecutor(max_workers=3) as executor:
+        with ThreadPoolExecutor(max_workers=self.MAX_WORKERS) as executor:
             for item in tqdm(items, total=len(items)):
                 if not force and "subsonic_id" in item:
                     self._log.debug("subsonic_id already present for: {}", item)
@@ -220,33 +229,20 @@ class SubsonicPlugin(BeetsPlugin):
             query = f"{item.title} {item.artist}"
         else:
             query = f"{item.album} {item.title}"
-        try:
-            response = requests.get(
-                url, params={**payload, "query": query, "songCount": 1}, timeout=5.0
+        payload = {**payload, "query": query, "songCount": 1}
+        json = self.send_request(url, payload)
+        if json:
+            id = json["subsonic-response"]["searchResult3"]["song"][0]["id"]
+            album = json["subsonic-response"]["searchResult3"]["song"][0]["album"]
+            artist = json["subsonic-response"]["searchResult3"]["song"][0]["artist"]
+            title = json["subsonic-response"]["searchResult3"]["song"][0]["title"]
+            self._log.debug(
+                f"{item.album} - {item.artist} - {item.title} matched with {id}: {album} - {artist} - {title}"
             )
-            json = response.json()
-            if (
-                response.status_code == 200
-                and json["subsonic-response"]["status"] == "ok"
-            ):
-                id = json["subsonic-response"]["searchResult3"]["song"][0]["id"]
-                album = json["subsonic-response"]["searchResult3"]["song"][0]["album"]
-                artist = json["subsonic-response"]["searchResult3"]["song"][0]["artist"]
-                title = json["subsonic-response"]["searchResult3"]["song"][0]["title"]
-                self._log.debug(
-                    f"{item.album} - {item.artist} - {item.title} matched with {id}: {album} - {artist} - {title}"
-                )
-                return id
-            else:
-                self._log.error(
-                    "Could not find {0} - {1} - {2}",
-                    item.album,
-                    item.artist,
-                    item.title,
-                )
-        except Exception as error:
+            return id
+        else:
             self._log.error(
-                f"Error: {error}: {item.album} - {item.artist} - {item.title}"
+                f"Could not find {item.album} - {item.artist} - {item.title}"
             )
 
     def update_rating(self, item, url, payload):
@@ -272,20 +268,18 @@ class SubsonicPlugin(BeetsPlugin):
         except AttributeError:
             self._log.debug("No rating found for: {}", item)
             return
-        response = requests.get(
-            url,
-            params={
-                **payload,
-                "id": id,
-                "rating": int(int(plex_userrating) / 2),
-            },
-            timeout=5.0,
-        )
-        json = response.json()
-        if response.status_code == 200 and json["subsonic-response"]["status"] == "ok":
+
+        payload = {
+            **payload,
+            "id": id,
+            "rating": int(int(plex_userrating) / 2),
+        }
+
+        json = self.send_request(url, payload)
+        if json:
             self._log.debug(f"Rating updated for {item}: {int(int(plex_userrating)/2)}")
         else:
-            self._log.error(f"Error: {json}")
+            self._log.error("Error updating rating")
 
     def subsonic_add_rating(self, items):
         url = self.__format_url("setRating")
@@ -293,7 +287,7 @@ class SubsonicPlugin(BeetsPlugin):
         if payload is None:
             return
 
-        with ThreadPoolExecutor(max_workers=3) as executor:
+        with ThreadPoolExecutor(max_workers=self.MAX_WORKERS) as executor:
             list(
                 tqdm(
                     executor.map(
