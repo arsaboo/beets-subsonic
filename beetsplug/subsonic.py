@@ -215,4 +215,4 @@ class SubsonicPlugin(BeetsPlugin):
                     item.title,
                 )
         except Exception as error:
-            self._log.error(f"Error: {error}")
+            self._log.error(f"Error: {error}: {item.album} - {item.artist} - {item.title}")
