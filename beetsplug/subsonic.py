@@ -60,9 +60,17 @@ class SubsonicPlugin(BeetsPlugin):
             "subsonicaddrating", help=f"Add ratings to {self.data_source} library"
         )
 
+        subsonicaddrating_cmd.parser.add_option(
+            "--rating",
+            dest="rating",
+            action="store_true",
+            default="plex_userrating",
+            help="Specify the rating field to be used for updating Subsonic ratings. Default is plex_userrating.",
+        )
+
         def func_add_rating(lib, opts, args):
             items = lib.items(ui.decargs(args))
-            self.subsonic_add_rating(items)
+            self.subsonic_add_rating(items, opts.rating)
 
         subsonicaddrating_cmd.func = func_add_rating
 
@@ -245,7 +253,7 @@ class SubsonicPlugin(BeetsPlugin):
                 f"Could not find {item.album} - {item.artist} - {item.title}"
             )
 
-    def update_rating(self, item, url, payload):
+    def update_rating(self, item, url, payload, rating_field):
         """
         Update the rating of an item on the Subsonic server.
 
@@ -266,24 +274,29 @@ class SubsonicPlugin(BeetsPlugin):
         else:
             id = item.subsonic_id
         try:
-            plex_userrating = item.plex_userrating
+            rating = getattr(item, rating_field)
         except AttributeError:
             self._log.debug("No rating found for: {}", item)
             return
-
+        rating = self.transform_rating(rating, rating_field)
         payload = {
             **payload,
             "id": id,
-            "rating": int(int(plex_userrating) / 2),
+            "rating": rating,
         }
 
         json = self.send_request(url, payload)
         if json:
-            self._log.debug(f"Rating updated for {item}: {int(int(plex_userrating)/2)}")
+            self._log.debug(f"Rating updated for {item}: {rating}")
         else:
             self._log.error("Error updating rating")
 
-    def subsonic_add_rating(self, items):
+    def transform_rating(self, rating, rating_field):
+        """Transform rating from beets to subsonic rating"""
+        if rating_field == "plex_userrating":
+            return int(int(rating) / 2)
+
+    def subsonic_add_rating(self, items, rating_field):
         url = self.__format_url("setRating")
         payload = self.authenticate()
         if payload is None:
@@ -293,7 +306,10 @@ class SubsonicPlugin(BeetsPlugin):
             list(
                 tqdm(
                     executor.map(
-                        lambda item: self.update_rating(item, url, payload), items
+                        lambda item: self.update_rating(
+                            item, url, payload, rating_field
+                        ),
+                        items,
                     ),
                     total=len(items),
                 )
