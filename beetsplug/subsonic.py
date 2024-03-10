@@ -261,7 +261,7 @@ class SubsonicPlugin(BeetsPlugin):
                 response.status_code == 200
                 and json["subsonic-response"]["status"] == "ok"
             ):
-                self._log.info(
+                self._log.debug(
                     f"Rating updated for {item}: {int(int(plex_userrating)/2)}"
                 )
             else:
