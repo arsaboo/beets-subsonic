@@ -40,5 +40,7 @@ The available options under the ``subsonic:`` section are:
 
 - **Update Rating**: You can sync your song ratings from your Beets library to your Subsonic server. You can specify the rating field to be used, e.g., `beet subsonic_addrating --rating plex_userrating`. The default is `plex_userrating`, but you can also use `spotify_track_popularity` as the rating field. You can use the default beets queries format to limit the items to be updated.
 
+- **Scrobble tracks**: You can use `beet subsonic_scrobble` to scrobble tracks in Subsonic server.
+
 - **Trigger Subsonic update**: You can use `beet subsonic_update` to manually trigger a scan.
 

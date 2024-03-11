@@ -97,7 +97,23 @@ class SubsonicPlugin(BeetsPlugin):
 
         subsonic_get_ids_cmd.func = func_get_ids
 
-        return [subsonicupdate_cmd, subsonicaddrating_cmd, subsonic_get_ids_cmd]
+        # scrobble
+        subsonic_scrobble_cmd = ui.Subcommand(
+            "subsonic_scrobble", help="Scrobble tracks"
+        )
+
+        def func_scrobble(lib, opts, args):
+            items = lib.items(ui.decargs(args))
+            self.subsonic_scrobble(items)
+
+        subsonic_scrobble_cmd.func = func_scrobble
+
+        return [
+            subsonicupdate_cmd,
+            subsonicaddrating_cmd,
+            subsonic_get_ids_cmd,
+            subsonic_scrobble_cmd,
+        ]
 
     @staticmethod
     def __create_token():
@@ -343,3 +359,44 @@ class SubsonicPlugin(BeetsPlugin):
 
     #     for item in tqdm(items, total=len(items)):
     #         self.update_rating(item, url, payload)
+
+    def subsonic_scrobble(self, items):
+        url = self.__format_url("scrobble")
+        payload = self.authenticate()
+        if payload is None:
+            return
+
+        for item in tqdm(items, total=len(items)):
+            self.scrobble(item, url, payload)
+
+    def scrobble(self, item, url, payload):
+        """
+        Scrobble an item to the Subsonic server.
+
+        Args:
+            item: The item to scrobble.
+            url: The URL of the Subsonic server.
+            payload: Additional parameters to include in the request.
+
+        Returns:
+            None
+
+        Raises:
+            None
+        """
+
+        if not hasattr(item, "subsonic_id"):
+            id = self.get_song_id(item)
+        else:
+            id = item.subsonic_id
+        payload = {
+            **payload,
+            "id": id,
+            "submissionTime": int(item.plex_lastviewedat.timestamp() * 1000),
+        }
+
+        json = self.send_request(url, payload)
+        if json:
+            self._log.debug(f"Scrobbled {item}")
+        else:
+            self._log.error("Error scrobbling")
