@@ -393,7 +393,7 @@ class SubsonicPlugin(BeetsPlugin):
         payload = {
             **payload,
             "id": id,
-            "time": item.plex_lastviewedat,
+            "time": int(item.plex_lastviewedat),
         }
 
         json = self.send_request(url, payload)
