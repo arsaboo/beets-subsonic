@@ -351,15 +351,6 @@ class SubsonicPlugin(BeetsPlugin):
                 )
             )
 
-    # def subsonic_add_rating(self, items):
-    #     url = self.__format_url("setRating")
-    #     payload = self.authenticate()
-    #     if payload is None:
-    #         return
-
-    #     for item in tqdm(items, total=len(items)):
-    #         self.update_rating(item, url, payload)
-
     def subsonic_scrobble(self, items):
         url = self.__format_url("scrobble")
         payload = self.authenticate()
@@ -393,7 +384,7 @@ class SubsonicPlugin(BeetsPlugin):
             payload = {
                 **payload,
                 "id": id,
-                "time": int(item.plex_lastviewedat)*1000,  # convert to milliseconds
+                "time": int(item.plex_lastviewedat) * 1000,  # convert to milliseconds
             }
         except AttributeError:
             self._log.debug("No scrobble time found for: {}", item)
