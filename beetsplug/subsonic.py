@@ -389,6 +389,7 @@ class SubsonicPlugin(BeetsPlugin):
             id = self.get_song_id(item)
         else:
             id = item.subsonic_id
+        self._log.error(f"Scrobble time: {item.plex_lastviewedat}")
         payload = {
             **payload,
             "id": id,
