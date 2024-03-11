@@ -389,12 +389,15 @@ class SubsonicPlugin(BeetsPlugin):
             id = self.get_song_id(item)
         else:
             id = item.subsonic_id
-        self._log.error(f"Scrobble time: {item.plex_lastviewedat}")
-        payload = {
-            **payload,
-            "id": id,
-            "time": int(item.plex_lastviewedat)*1000,  # convert to milliseconds
-        }
+        try:
+            payload = {
+                **payload,
+                "id": id,
+                "time": int(item.plex_lastviewedat)*1000,  # convert to milliseconds
+            }
+        except AttributeError:
+            self._log.debug("No scrobble time found for: {}", item)
+            return
 
         json = self.send_request(url, payload)
         if json:
