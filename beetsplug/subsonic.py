@@ -229,13 +229,12 @@ class SubsonicPlugin(BeetsPlugin):
         """Get subsonic_id for items"""
         with ThreadPoolExecutor(max_workers=self.MAX_WORKERS) as executor:
             for item in tqdm(items, total=len(items)):
-                if not force and "subsonic_id" in item:
+                if not force and hasattr(item, "subsonic_id"):
                     self._log.debug("subsonic_id already present for: {}", item)
                     continue
-                if not hasattr(item, "subsonic_id"):
-                    future = executor.submit(self.get_song_id, item)
-                    item.subsonic_id = future.result()
-                    item.store()
+                future = executor.submit(self.get_song_id, item)
+                item.subsonic_id = future.result()
+                item.store()
 
     def get_song_id(self, item):
         """
