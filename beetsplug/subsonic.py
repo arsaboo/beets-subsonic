@@ -269,7 +269,8 @@ class SubsonicPlugin(BeetsPlugin):
             return id
         else:
             self._log.error(
-                f"Could not find {item.album} - {item.artist} - {item.title}"
+                f"Could not find {item.album} - {item.artist} - "
+                f"{item.title} in Subnic library."
             )
 
     def update_rating(self, item, url, payload, rating_field):
