@@ -6,7 +6,6 @@ import hashlib
 import random
 import string
 from binascii import hexlify
-import sys
 
 import requests
 
@@ -358,9 +357,8 @@ class SubsonicPlugin(BeetsPlugin):
         if payload is None:
             return
 
-        with tqdm(items, total=len(items), file=sys.stderr) as pbar:
-            for item in pbar:
-                self.scrobble(item, url, payload)
+        for item in tqdm(items, total=len(items)):
+            self.scrobble(item, url, payload)
 
     def scrobble(self, item, url, payload):
         """
