@@ -194,10 +194,10 @@ class SubsonicPlugin(BeetsPlugin):
                 return json
             else:
                 error_message = json["subsonic-response"]["error"]["message"]
-                self._log.error(f"Error: {error_message}")
+                self._log.error(f"Error while processing JSON response: {error_message}")
                 return None
         except requests.exceptions.RequestException as error:
-            self._log.error(f"Error: {error}")
+            self._log.error(f"RequestException occurred while sending request: {error}")
             return None
 
     def start_scan(self):
@@ -270,7 +270,7 @@ class SubsonicPlugin(BeetsPlugin):
         else:
             self._log.error(
                 f"Could not find {item.album} - {item.artist} - "
-                f"{item.title} in Subnic library."
+                f"{item.title} in Subsonic library."
             )
 
     def update_rating(self, item, url, payload, rating_field):
