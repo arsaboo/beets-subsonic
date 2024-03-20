@@ -30,6 +30,7 @@ class SubsonicPlugin(BeetsPlugin):
                 "pass": "admin",
                 "url": "http://localhost:4533",
                 "auth": "token",
+                'auto_scan': True,
             }
         )
         config["subsonic"]["pass"].redact = True
@@ -37,10 +38,12 @@ class SubsonicPlugin(BeetsPlugin):
         self.register_listener("smartplaylist_update", self.spl_update)
 
     def db_change(self, lib, model):
-        self.register_listener("cli_exit", self.start_scan)
+        if self.config['auto_scan'].get(bool):
+            self.register_listener("cli_exit", self.start_scan)
 
     def spl_update(self):
-        self.register_listener("cli_exit", self.start_scan)
+        if self.config['auto_scan'].get(bool):
+            self.register_listener("cli_exit", self.start_scan)
 
     def commands(self):
         """Add beet UI commands to interact with Subsonic."""

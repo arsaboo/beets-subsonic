@@ -22,6 +22,7 @@ subsonic:
     user: username
     pass: password
     auth: token
+    auto_scan: True
 ```
 
 The available options under the ``subsonic:`` section are:
@@ -33,6 +34,7 @@ The available options under the ``subsonic:`` section are:
 - **auth**: The authentication method. Possible choices are ``token`` or
   ``password``. ``token`` authentication is preferred to avoid sending
   cleartext password.
+- **auto_scan**: Determines whether the plugin should automatically trigger scan on the Subsonic server. Default: `True`
 
 ## Features
 
