@@ -196,7 +196,8 @@ class SubsonicPlugin(BeetsPlugin):
             if json["subsonic-response"]["status"] == "ok":
                 return json
             else:
-                self._log.error(f"Error while processing JSON response for {url}: {json}")
+                error_message = json["subsonic-response"]["error"]["message"]
+                self._log.error(f"Error while processing JSON response {payload}: {error_message}")
                 return None
         except requests.exceptions.RequestException as error:
             self._log.error(f"RequestException occurred while sending request: {error}")
