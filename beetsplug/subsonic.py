@@ -11,7 +11,7 @@ import requests
 
 from beets import config, ui
 from beets.plugins import BeetsPlugin
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from tqdm import tqdm
 
 
@@ -30,7 +30,7 @@ class SubsonicPlugin(BeetsPlugin):
                 "pass": "admin",
                 "url": "http://localhost:4533",
                 "auth": "token",
-                'auto_scan': True,
+                "auto_scan": True,
             }
         )
         config["subsonic"]["pass"].redact = True
@@ -39,11 +39,11 @@ class SubsonicPlugin(BeetsPlugin):
         self.register_listener("smartplaylist_update", self.spl_update)
 
     def db_change(self, lib, model):
-        if self.config['auto_scan'].get(bool):
+        if self.config["auto_scan"].get(bool):
             self.register_listener("cli_exit", self.start_scan)
 
     def spl_update(self):
-        if self.config['auto_scan'].get(bool):
+        if self.config["auto_scan"].get(bool):
             self.register_listener("cli_exit", self.start_scan)
 
     def commands(self):
@@ -198,7 +198,9 @@ class SubsonicPlugin(BeetsPlugin):
                 return json
             else:
                 error_message = json["subsonic-response"]["error"]["message"]
-                self._log.error(f"Error while processing JSON response: {error_message}")
+                self._log.error(
+                    f"Error while processing JSON response: {error_message}"
+                )
                 return None
         except requests.exceptions.RequestException as error:
             self._log.error(f"RequestException occurred while sending request: {error}")
@@ -235,13 +237,20 @@ class SubsonicPlugin(BeetsPlugin):
     def subsonic_get_ids(self, items, force):
         """Get subsonic_id for items"""
         with ThreadPoolExecutor(max_workers=self.MAX_WORKERS) as executor:
-            for item in tqdm(items, total=len(items)):
-                if not force and hasattr(item, "subsonic_id"):
-                    self._log.debug("subsonic_id already present for: {}", item)
-                    continue
-                future = executor.submit(self.get_song_id, item)
-                item.subsonic_id = future.result()
-                item.store()
+            # Start the load operations and mark each future with its item
+            future_to_item = {
+                executor.submit(self.get_song_id, item): item
+                for item in items
+                if not force or not hasattr(item, "subsonic_id")
+            }
+            for future in as_completed(future_to_item):
+                item = future_to_item[future]
+                try:
+                    item.subsonic_id = future.result()
+                    item.store()
+                    self._log.debug("subsonic_id updated for: {}", item)
+                except Exception as exc:
+                    self._log.error("%r generated an exception: %s" % (item, exc))
 
     def get_song_id(self, item):
         """
@@ -309,10 +318,12 @@ class SubsonicPlugin(BeetsPlugin):
 
         rating = self.transform_rating(rating, rating_field)
 
-        payload.update({
-            "id": id,
-            "rating": rating,
-        })
+        payload.update(
+            {
+                "id": id,
+                "rating": rating,
+            }
+        )
 
         json = self.send_request(url, payload)
         if json:
@@ -348,17 +359,21 @@ class SubsonicPlugin(BeetsPlugin):
             return
 
         with ThreadPoolExecutor(max_workers=self.MAX_WORKERS) as executor:
-            list(
-                tqdm(
-                    executor.map(
-                        lambda item: self.update_rating(
-                            item, url, payload, rating_field
-                        ),
-                        items,
-                    ),
-                    total=len(items),
-                )
-            )
+            # Start the load operations and mark each future with its URL
+            future_to_item = {
+                executor.submit(
+                    self.update_rating, item, url, payload, rating_field
+                ): item
+                for item in items
+            }
+            for future in as_completed(future_to_item):
+                item = future_to_item[future]
+                try:
+                    data = future.result()
+                except Exception as exc:
+                    print("%r generated an exception: %s" % (item, exc))
+                else:
+                    print("Updated rating for %r" % item)
 
     def subsonic_scrobble(self, items):
         url = self.__format_url("scrobble")
