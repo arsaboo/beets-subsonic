@@ -261,10 +261,11 @@ class SubsonicPlugin(BeetsPlugin):
         payload = {**payload, "query": query, "songCount": 1}
         json = self.send_request(url, payload)
         if json and "song" in json["subsonic-response"]["searchResult3"]:
-            id = json["subsonic-response"]["searchResult3"]["song"][0]["id"]
-            album = json["subsonic-response"]["searchResult3"]["song"][0]["album"]
-            artist = json["subsonic-response"]["searchResult3"]["song"][0]["artist"]
-            title = json["subsonic-response"]["searchResult3"]["song"][0]["title"]
+            song = json["subsonic-response"]["searchResult3"]["song"][0]
+            id = song["id"]
+            album = song["album"]
+            artist = song["artist"]
+            title = song["title"]
             self._log.debug(
                 f"{item.album} - {item.artist} - {item.title} matched "
                 f"with {id}: {album} - {artist} - {title}"
