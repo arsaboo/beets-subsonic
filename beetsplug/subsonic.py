@@ -317,7 +317,7 @@ class SubsonicPlugin(BeetsPlugin):
     def transform_rating(self, rating, rating_field):
         """Transform rating from beets to subsonic rating"""
         if rating_field == "plex_userrating":
-            return int(int(rating) / 2)
+            return round(rating / 2)
         elif rating_field == "spotify_track_popularity":
             popularity = float(rating)
             if popularity < 16.66:
