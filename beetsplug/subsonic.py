@@ -34,6 +34,7 @@ class SubsonicPlugin(BeetsPlugin):
             }
         )
         config["subsonic"]["pass"].redact = True
+        self.session = requests.Session()
         self.register_listener("database_change", self.db_change)
         self.register_listener("smartplaylist_update", self.spl_update)
 
@@ -190,7 +191,7 @@ class SubsonicPlugin(BeetsPlugin):
 
     def send_request(self, url, payload):
         try:
-            response = requests.get(url, params=payload, timeout=5.0)
+            response = self.session.get(url, params=payload, timeout=5.0)
             response.raise_for_status()
             json = response.json()
             if json["subsonic-response"]["status"] == "ok":
@@ -202,6 +203,9 @@ class SubsonicPlugin(BeetsPlugin):
         except requests.exceptions.RequestException as error:
             self._log.error(f"RequestException occurred while sending request: {error}")
             return None
+
+    def close(self):
+        self.session.close()
 
     def start_scan(self):
         """Start a scan of the Subsonic library."""
@@ -293,21 +297,22 @@ class SubsonicPlugin(BeetsPlugin):
             None
         """
 
-        if not hasattr(item, "subsonic_id"):
+        id = getattr(item, "subsonic_id", None)
+        if id is None:
             id = self.get_song_id(item)
-        else:
-            id = item.subsonic_id
+
         try:
             rating = getattr(item, rating_field)
         except AttributeError:
             self._log.debug("No rating found for: {}", item)
             return
+
         rating = self.transform_rating(rating, rating_field)
-        payload = {
-            **payload,
+
+        payload.update({
             "id": id,
             "rating": rating,
-        }
+        })
 
         json = self.send_request(url, payload)
         if json:
