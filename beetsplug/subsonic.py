@@ -237,20 +237,13 @@ class SubsonicPlugin(BeetsPlugin):
     def subsonic_get_ids(self, items, force):
         """Get subsonic_id for items"""
         with ThreadPoolExecutor(max_workers=self.MAX_WORKERS) as executor:
-            # Start the load operations and mark each future with its item
-            future_to_item = {
-                executor.submit(self.get_song_id, item): item
-                for item in items
-                if not force or not hasattr(item, "subsonic_id")
-            }
-            for future in as_completed(future_to_item):
-                item = future_to_item[future]
-                try:
-                    item.subsonic_id = future.result()
-                    item.store()
-                    self._log.debug("subsonic_id updated for: {}", item)
-                except Exception as exc:
-                    self._log.error("%r generated an exception: %s" % (item, exc))
+            for item in tqdm(items, total=len(items)):
+                if not force and hasattr(item, "subsonic_id"):
+                    self._log.debug("subsonic_id already present for: {}", item)
+                    continue
+                future = executor.submit(self.get_song_id, item)
+                item.subsonic_id = future.result()
+                item.store()
 
     def get_song_id(self, item):
         """
