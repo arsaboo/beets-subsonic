@@ -352,21 +352,17 @@ class SubsonicPlugin(BeetsPlugin):
             return
 
         with ThreadPoolExecutor(max_workers=self.MAX_WORKERS) as executor:
-            # Start the load operations and mark each future with its URL
-            future_to_item = {
-                executor.submit(
-                    self.update_rating, item, url, payload, rating_field
-                ): item
-                for item in items
-            }
-            for future in as_completed(future_to_item):
-                item = future_to_item[future]
-                try:
-                    data = future.result()
-                except Exception as exc:
-                    print("%r generated an exception: %s" % (item, exc))
-                else:
-                    print("Updated rating for %r" % item)
+            list(
+                tqdm(
+                    executor.map(
+                        lambda item: self.update_rating(
+                            item, url, payload, rating_field
+                        ),
+                        items,
+                    ),
+                    total=len(items),
+                )
+            )
 
     def subsonic_scrobble(self, items):
         url = self.__format_url("scrobble")
