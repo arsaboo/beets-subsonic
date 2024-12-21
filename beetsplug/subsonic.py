@@ -61,7 +61,8 @@ class SubsonicPlugin(BeetsPlugin):
 
         # Subsonic rating update command
         subsonicaddrating_cmd = ui.Subcommand(
-            "subsonic_addrating", help=f"Add ratings to {self.data_source} library"
+            "subsonic_addrating",
+            help=f"Add ratings to {self.data_source} library",
         )
 
         subsonicaddrating_cmd.parser.add_option(
@@ -197,7 +198,9 @@ class SubsonicPlugin(BeetsPlugin):
 
             # Check if we got a valid response
             if "subsonic-response" not in json:
-                self._log.error("Invalid response from server: missing subsonic-response")
+                self._log.error(
+                    "Invalid response from server: missing subsonic-response"
+                )
                 return None
 
             if json["subsonic-response"]["status"] == "ok":
@@ -206,12 +209,19 @@ class SubsonicPlugin(BeetsPlugin):
                 error = json["subsonic-response"].get("error", {})
                 error_message = error.get("message", "Unknown error")
                 error_code = error.get("code", "Unknown code")
+                if str(error_code) == "70":
+                    self._log.warning(
+                        f"Server returned error 70 (data not found): {error_message}"
+                    )
+                    return None
                 self._log.error(
                     f"Server returned error {error_code}: {error_message}"
                 )
                 return None
         except requests.exceptions.RequestException as error:
-            self._log.error(f"RequestException occurred while sending request: {error}")
+            self._log.error(
+                f"RequestException occurred while sending request: {error}"
+            )
             return None
         except ValueError as error:
             self._log.error(f"Invalid JSON response from server: {error}")
@@ -268,9 +278,10 @@ class SubsonicPlugin(BeetsPlugin):
         # Try different search strategies in order of specificity
         search_strategies = [
             lambda: f'"{item.title}" "{item.artist}"',  # exact title and artist
-            lambda: f"{item.title} {item.artist}",      # title and artist
-            lambda: f'"{item.title}"',                  # just title
-            lambda: item.title                          # title without quotes
+            lambda: f"{item.title} {item.artist}",  # title and artist
+            lambda: f'"{item.title}"',  # just title
+            lambda: item.title,  # title without quotes
+            lambda: f"{item.artist} {item.album}",  # new fallback
         ]
 
         for strategy in search_strategies:
@@ -299,8 +310,8 @@ class SubsonicPlugin(BeetsPlugin):
                     )
                     return song["id"]
 
-        self._log.error(
-            f"Could not find match for:\n"
+        self._log.warning(
+            f"Could not find match (even with album) for:\n"
             f"Title: {item.title}\n"
             f"Artist: {item.artist}\n"
             f"Album: {item.album}"
@@ -324,10 +335,14 @@ class SubsonicPlugin(BeetsPlugin):
         """
         id = getattr(item, "subsonic_id", None)
         if id is None:
-            self._log.debug(f"No subsonic_id found for {item}, attempting to fetch it")
+            self._log.debug(
+                f"No subsonic_id found for {item}, attempting to fetch it"
+            )
             id = self.get_song_id(item)
             if id is None:
-                self._log.error(f"Could not find song ID for {item}, skipping rating update")
+                self._log.error(
+                    f"Could not find song ID for {item}, skipping rating update"
+                )
                 return
 
         try:
@@ -342,10 +357,12 @@ class SubsonicPlugin(BeetsPlugin):
             return
 
         request_payload = payload.copy()
-        request_payload.update({
-            "id": id,
-            "rating": rating,
-        })
+        request_payload.update(
+            {
+                "id": id,
+                "rating": rating,
+            }
+        )
 
         self._log.debug(f"Updating rating for {item} (ID: {id}) to {rating}")
         json = self.send_request(url, request_payload)
@@ -427,12 +444,12 @@ class SubsonicPlugin(BeetsPlugin):
             payload = {
                 **payload,
                 "id": id,
-                "time": int(item.plex_lastviewedat) * 1000,  # convert to milliseconds
+                "time": int(item.plex_lastviewedat)
+                * 1000,  # convert to milliseconds
             }
         except AttributeError:
             self._log.debug("No scrobble time found for: {}", item)
             return
-
         json = self.send_request(url, payload)
         if json:
             self._log.debug(f"Scrobbled {item}")
