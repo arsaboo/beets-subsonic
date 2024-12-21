@@ -258,41 +258,54 @@ class SubsonicPlugin(BeetsPlugin):
 
     def get_song_id(self, item):
         """
-        Retrieves the ID of a song from the Subsonic server based on the provided item.
-
-        Args:
-            item: The item object representing the song.
-
-        Returns:
-            The ID of the song if found, None otherwise.
+        Retrieves the ID of a song from the Subsonic server using multiple search strategies.
         """
-
         url = self.__format_url("search3")
         payload = self.authenticate()
         if payload is None:
             return None
-        if item.album == item.title:
-            query = f"{item.title} {item.artist}"
-        else:
-            query = f"{item.album} {item.title}"
-        payload = {**payload, "query": query, "songCount": 1}
-        json = self.send_request(url, payload)
-        if json and "song" in json["subsonic-response"]["searchResult3"]:
-            song = json["subsonic-response"]["searchResult3"]["song"][0]
-            id = song["id"]
-            album = song["album"]
-            artist = song["artist"]
-            title = song["title"]
-            self._log.debug(
-                f"{item.album} - {item.artist} - {item.title} matched "
-                f"with {id}: {album} - {artist} - {title}"
-            )
-            return id
-        else:
-            self._log.error(
-                f"Could not find {item.album} - {item.artist} - "
-                f"{item.title} in Subsonic library."
-            )
+
+        # Try different search strategies in order of specificity
+        search_strategies = [
+            lambda: f'"{item.title}" "{item.artist}"',  # exact title and artist
+            lambda: f"{item.title} {item.artist}",      # title and artist
+            lambda: f'"{item.title}"',                  # just title
+            lambda: item.title                          # title without quotes
+        ]
+
+        for strategy in search_strategies:
+            query = strategy()
+            self._log.debug(f"Trying search query: {query}")
+
+            search_payload = {**payload, "query": query, "songCount": 10}
+            json = self.send_request(url, search_payload)
+
+            if not json:
+                continue
+
+            search_result = json["subsonic-response"].get("searchResult3", {})
+            if "song" not in search_result:
+                self._log.debug(f"No results found for query: {query}")
+                continue
+
+            # Try to find the best match among results
+            for song in search_result["song"]:
+                # Check if title matches (case-insensitive)
+                if item.title.lower() in song["title"].lower():
+                    self._log.debug(
+                        f"Match found:\n"
+                        f"Beets:    {item.artist} - {item.title}\n"
+                        f"Subsonic: {song['artist']} - {song['title']}"
+                    )
+                    return song["id"]
+
+        self._log.error(
+            f"Could not find match for:\n"
+            f"Title: {item.title}\n"
+            f"Artist: {item.artist}\n"
+            f"Album: {item.album}"
+        )
+        return None
 
     def update_rating(self, item, url, payload, rating_field):
         """
