@@ -194,16 +194,27 @@ class SubsonicPlugin(BeetsPlugin):
             response = self.session.get(url, params=payload, timeout=5.0)
             response.raise_for_status()
             json = response.json()
+
+            # Check if we got a valid response
+            if "subsonic-response" not in json:
+                self._log.error("Invalid response from server: missing subsonic-response")
+                return None
+
             if json["subsonic-response"]["status"] == "ok":
                 return json
             else:
-                error_message = json["subsonic-response"]["error"]["message"]
+                error = json["subsonic-response"].get("error", {})
+                error_message = error.get("message", "Unknown error")
+                error_code = error.get("code", "Unknown code")
                 self._log.error(
-                    f"Error while processing JSON response: {error_message}"
+                    f"Server returned error {error_code}: {error_message}"
                 )
                 return None
         except requests.exceptions.RequestException as error:
             self._log.error(f"RequestException occurred while sending request: {error}")
+            return None
+        except ValueError as error:
+            self._log.error(f"Invalid JSON response from server: {error}")
             return None
 
     def close(self):
@@ -298,31 +309,37 @@ class SubsonicPlugin(BeetsPlugin):
         Raises:
             None
         """
-
         id = getattr(item, "subsonic_id", None)
         if id is None:
+            self._log.debug(f"No subsonic_id found for {item}, attempting to fetch it")
             id = self.get_song_id(item)
+            if id is None:
+                self._log.error(f"Could not find song ID for {item}, skipping rating update")
+                return
 
         try:
             rating = getattr(item, rating_field)
         except AttributeError:
-            self._log.debug("No rating found for: {}", item)
+            self._log.debug(f"No {rating_field} found for: {item}")
             return
 
         rating = self.transform_rating(rating, rating_field)
+        if rating is None:
+            self._log.error(f"Invalid rating value for {item}")
+            return
 
-        payload.update(
-            {
-                "id": id,
-                "rating": rating,
-            }
-        )
+        request_payload = payload.copy()
+        request_payload.update({
+            "id": id,
+            "rating": rating,
+        })
 
-        json = self.send_request(url, payload)
+        self._log.debug(f"Updating rating for {item} (ID: {id}) to {rating}")
+        json = self.send_request(url, request_payload)
         if json:
-            self._log.debug(f"Rating updated for {item}: {rating}")
+            self._log.debug(f"Successfully updated rating for {item}: {rating}")
         else:
-            self._log.error("Error updating rating")
+            self._log.error(f"Failed to update rating for {item}")
 
     def transform_rating(self, rating, rating_field):
         """Transform rating from beets to subsonic rating"""
