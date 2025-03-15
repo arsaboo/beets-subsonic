@@ -319,11 +319,13 @@ class SubsonicPlugin(BeetsPlugin):
             if song_id:
                 return song_id
 
+        # Log detailed information for debugging
         self._log.warning(
             f"Could not find match for:\n"
             f"Title: {item.title}\n"
             f"Artist: {item.artist}\n"
-            f"Album: {item.album}"
+            f"Album: {item.album}\n"
+            f"Search strategies tried: {[strategy() for strategy in search_strategies]}"
         )
         return None
 
