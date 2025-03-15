@@ -214,14 +214,10 @@ class SubsonicPlugin(BeetsPlugin):
                         f"Server returned error 70 (data not found): {error_message}"
                     )
                     return None
-                self._log.error(
-                    f"Server returned error {error_code}: {error_message}"
-                )
+                self._log.error(f"Server returned error {error_code}: {error_message}")
                 return None
         except requests.exceptions.RequestException as error:
-            self._log.error(
-                f"RequestException occurred while sending request: {error}"
-            )
+            self._log.error(f"RequestException occurred while sending request: {error}")
             return None
         except ValueError as error:
             self._log.error(f"Invalid JSON response from server: {error}")
@@ -286,18 +282,20 @@ class SubsonicPlugin(BeetsPlugin):
         # Try different search strategies in order of specificity
         search_strategies = [
             # Exact matches first
-            lambda: f'"{item.title}" "{artist}"',            # exact title and full artist
-            lambda: f'"{item.title}" "{primary_artist}"',    # exact title and primary artist
-            lambda: f'"{item.title}"',                       # exact title only
-
+            lambda: f'"{item.title}" "{artist}"',  # exact title and full artist
+            lambda: f'"{item.title}" "{primary_artist}"',  # exact title and primary artist
+            lambda: f'"{item.title}"',  # exact title only
             # Looser matches
-            lambda: f"{item.title} {primary_artist}",        # title and primary artist without quotes
-            lambda: item.title,                              # just the title
-            lambda: f"{primary_artist} {item.album}",        # primary artist and album
-            lambda: item.album,                              # just the album
-
+            lambda: f"{item.title} {primary_artist}",  # title and primary artist without quotes
+            lambda: item.title,  # just the title
+            lambda: f"{primary_artist} {item.album}",  # primary artist and album
+            lambda: item.album,  # just the album
             # Last resort - just search for album artist if different
-            lambda: getattr(item, 'albumartist', None) if getattr(item, 'albumartist', None) != artist else None
+            lambda: (
+                getattr(item, "albumartist", None)
+                if getattr(item, "albumartist", None) != artist
+                else None
+            ),
         ]
 
         # Filter out None strategies
@@ -307,7 +305,11 @@ class SubsonicPlugin(BeetsPlugin):
             query = strategy()
             self._log.debug(f"Trying search query: {query}")
 
-            search_payload = {**payload, "query": query, "songCount": 20}  # Increased from 10 to 20
+            search_payload = {
+                **payload,
+                "query": query,
+                "songCount": 20,
+            }  # Increased from 10 to 20
             json = self.send_request(url, search_payload)
 
             if not json:
@@ -326,18 +328,21 @@ class SubsonicPlugin(BeetsPlugin):
                 # Title match (most important)
                 if item.title.lower() == song["title"].lower():
                     score += 100  # Exact title match
-                elif item.title.lower() in song["title"].lower() or song["title"].lower() in item.title.lower():
-                    score += 50   # Partial title match
+                elif (
+                    item.title.lower() in song["title"].lower()
+                    or song["title"].lower() in item.title.lower()
+                ):
+                    score += 50  # Partial title match
 
                 # Artist match
                 if artist.lower() == song.get("artist", "").lower():
-                    score += 30   # Exact artist match
+                    score += 30  # Exact artist match
                 elif primary_artist.lower() in song.get("artist", "").lower():
-                    score += 20   # Primary artist appears in song artist
+                    score += 20  # Primary artist appears in song artist
 
                 # Album match
                 if item.album.lower() == song.get("album", "").lower():
-                    score += 15   # Album match
+                    score += 15  # Album match
 
                 # If the score is above threshold, consider it a match
                 if score > 0:
@@ -355,7 +360,7 @@ class SubsonicPlugin(BeetsPlugin):
             if matches:
                 matches.sort(key=lambda x: x[1], reverse=True)
                 best_match, score = matches[0]
-                self._log.info(
+                self._log.debug(
                     f"Match found (score {score}):\n"
                     f"Beets:    {item.artist} - {item.title} ({item.album})\n"
                     f"Subsonic: {best_match.get('artist', 'Unknown')} - {best_match['title']} ({best_match.get('album', 'Unknown')})"
@@ -438,9 +443,7 @@ class SubsonicPlugin(BeetsPlugin):
         """
         id = getattr(item, "subsonic_id", None)
         if id is None:
-            self._log.debug(
-                f"No subsonic_id found for {item}, attempting to fetch it"
-            )
+            self._log.debug(f"No subsonic_id found for {item}, attempting to fetch it")
             id = self.get_song_id(item)
             if id is None:
                 self._log.error(
@@ -547,8 +550,7 @@ class SubsonicPlugin(BeetsPlugin):
             payload = {
                 **payload,
                 "id": id,
-                "time": int(item.plex_lastviewedat)
-                * 1000,  # convert to milliseconds
+                "time": int(item.plex_lastviewedat) * 1000,  # convert to milliseconds
             }
         except AttributeError:
             self._log.debug("No scrobble time found for: {}", item)
