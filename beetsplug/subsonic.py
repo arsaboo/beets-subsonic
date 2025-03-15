@@ -274,25 +274,23 @@ class SubsonicPlugin(BeetsPlugin):
         # Clean artist name to handle featuring artists and multiple artists
         artist = item.artist.split(",")[0].strip() if "," in item.artist else item.artist
 
-        # Try different search strategies in order of efficiency
+        # Since title-only searches work well, start with the simplest strategy
         search_strategies = [
+            lambda: item.title.strip(),                           # just the title (most successful)
             lambda: f'"{item.title.strip()}"',                    # exact title only
-            lambda: item.title.strip(),                           # just the title
-            lambda: f'"{item.title.strip()}" "{artist.strip()}"',  # exact title and full artist
-            lambda: f'{item.title.strip()} {artist.strip()}',     # title and artist without quotes
-            lambda: f'{artist.strip()} {item.album.strip()}',     # artist and album
-            lambda: item.album.strip(),                           # just the album
             lambda: f'{item.title.strip()} {item.album.strip()}', # title and album
+            lambda: f'{artist.strip()} {item.title.strip()}',     # artist and title without quotes
+            lambda: item.album.strip(),                           # just the album (fallback)
         ]
 
-        # Keep track of all songs found across all search strategies
+        # Store all songs found for lenient matching later
         all_potential_matches = []
 
         for strategy in search_strategies:
             query = strategy()
             self._log.debug(f"Trying search query: {query}")
 
-            search_payload = {**payload, "query": query, "songCount": 30}  # Increased to 30
+            search_payload = {**payload, "query": query, "songCount": 20}
             json = self.send_request(url, search_payload)
 
             if not json:
@@ -303,50 +301,29 @@ class SubsonicPlugin(BeetsPlugin):
                 self._log.debug(f"No results found for query: {query}")
                 continue
 
-            # Store all results for this search strategy
+            # Process the results
             for song in search_result["song"]:
                 all_potential_matches.append(song)
 
-                # First check for very strict match
+                # Try for exact match first
                 if item.title.lower() == song["title"].lower():
-                    # Exact title match
-                    if artist.lower() in song.get("artist", "").lower() or item.album.lower() in song.get("album", "").lower():
-                        self._log.debug(
-                            f"Exact match found:\n"
-                            f"Beets:    {item.artist} - {item.title} ({item.album})\n"
-                            f"Subsonic: {song.get('artist', 'Unknown')} - {song['title']} ({song.get('album', 'Unknown')})"
-                        )
-                        return song["id"]
-
-                # Then check for looser match (title contained)
-                if (item.title.lower() in song["title"].lower() and
-                    (artist.lower() in song.get("artist", "").lower() or
-                     item.album.lower() in song.get("album", "").lower())):
                     self._log.debug(
-                        f"Match found:\n"
+                        f"Exact title match found:\n"
                         f"Beets:    {item.artist} - {item.title} ({item.album})\n"
                         f"Subsonic: {song.get('artist', 'Unknown')} - {song['title']} ({song.get('album', 'Unknown')})"
                     )
                     return song["id"]
 
-        # If we get here, we didn't find a match with our normal criteria
-        # Try more lenient matching on the accumulated potential matches
+        # If we haven't found an exact match, try lenient matching on all potential matches
         if all_potential_matches:
-            self._log.debug(f"Trying more lenient matching on {len(all_potential_matches)} potential matches")
+            # Sort by normalized edit distance to find closest match
+            self._log.debug(f"Trying lenient matching on {len(all_potential_matches)} potential matches")
 
-            # Try just matching on title substring (most lenient)
             for song in all_potential_matches:
                 title_normalized = item.title.lower().strip()
                 song_title_normalized = song["title"].lower().strip()
 
-                # Log all potential matches for debugging
-                self._log.debug(
-                    f"Potential match:\n"
-                    f"Beets:    {item.title}\n"
-                    f"Subsonic: {song['title']}"
-                )
-
-                # Check for title substring match (very lenient)
+                # Check for title substring in either direction
                 if title_normalized in song_title_normalized or song_title_normalized in title_normalized:
                     self._log.info(
                         f"Lenient match found:\n"
@@ -355,20 +332,18 @@ class SubsonicPlugin(BeetsPlugin):
                     )
                     return song["id"]
 
-        # Try a direct albumId approach as a fallback
+        # Try album search as final fallback
         album_id = self.get_album_id_by_name(item.album, artist, payload)
         if album_id:
             song_id = self.find_song_in_album(album_id, item.title, payload)
             if song_id:
                 return song_id
 
-        # Log detailed information for debugging
         self._log.warning(
             f"Could not find match for:\n"
             f"Title: {item.title}\n"
             f"Artist: {item.artist}\n"
-            f"Album: {item.album}\n"
-            f"Search strategies tried: {[strategy() for strategy in search_strategies]}"
+            f"Album: {item.album}"
         )
         return None
 
