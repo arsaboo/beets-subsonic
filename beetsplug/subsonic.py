@@ -272,44 +272,23 @@ class SubsonicPlugin(BeetsPlugin):
             return None
 
         # Clean artist name to handle featuring artists and multiple artists
-        artist = item.artist
-        if isinstance(artist, str) and "," in artist:
-            # Try with just the first artist for multi-artist tracks
-            primary_artist = artist.split(",")[0].strip()
-        else:
-            primary_artist = artist
+        artist = item.artist.split(",")[0].strip() if "," in item.artist else item.artist
 
-        # Try different search strategies in order of specificity
+        # Try different search strategies in order of efficiency
         search_strategies = [
-            # Exact matches first
             lambda: f'"{item.title}" "{artist}"',  # exact title and full artist
-            lambda: f'"{item.title}" "{primary_artist}"',  # exact title and primary artist
-            lambda: f'"{item.title}"',  # exact title only
-            # Looser matches
-            lambda: f"{item.title} {primary_artist}",  # title and primary artist without quotes
-            lambda: item.title,  # just the title
-            lambda: f"{primary_artist} {item.album}",  # primary artist and album
-            lambda: item.album,  # just the album
-            # Last resort - just search for album artist if different
-            lambda: (
-                getattr(item, "albumartist", None)
-                if getattr(item, "albumartist", None) != artist
-                else None
-            ),
+            lambda: f'"{item.title}"',             # exact title only
+            lambda: f'{item.title} {artist}',      # title and artist without quotes
+            lambda: item.title,                    # just the title
+            lambda: f'{artist} {item.album}',      # artist and album
+            lambda: item.album,                    # just the album
         ]
-
-        # Filter out None strategies
-        search_strategies = [s for s in search_strategies if s() is not None]
 
         for strategy in search_strategies:
             query = strategy()
             self._log.debug(f"Trying search query: {query}")
 
-            search_payload = {
-                **payload,
-                "query": query,
-                "songCount": 20,
-            }  # Increased from 10 to 20
+            search_payload = {**payload, "query": query, "songCount": 20}
             json = self.send_request(url, search_payload)
 
             if not json:
@@ -320,52 +299,15 @@ class SubsonicPlugin(BeetsPlugin):
                 self._log.debug(f"No results found for query: {query}")
                 continue
 
-            # Try to find the best match among results using weighted matching
-            matches = []
+            # Try to find the best match among results
             for song in search_result["song"]:
-                score = 0
-
-                # Title match (most important)
-                if item.title.lower() == song["title"].lower():
-                    score += 100  # Exact title match
-                elif (
-                    item.title.lower() in song["title"].lower()
-                    or song["title"].lower() in item.title.lower()
-                ):
-                    score += 50  # Partial title match
-
-                # Artist match
-                if artist.lower() == song.get("artist", "").lower():
-                    score += 30  # Exact artist match
-                elif primary_artist.lower() in song.get("artist", "").lower():
-                    score += 20  # Primary artist appears in song artist
-
-                # Album match
-                if item.album.lower() == song.get("album", "").lower():
-                    score += 15  # Album match
-
-                # If the score is above threshold, consider it a match
-                if score > 0:
-                    matches.append((song, score))
-
-                # Log possible matches for debugging
-                if score > 30:  # Only log potentially good matches
+                if item.title.lower() in song["title"].lower() and artist.lower() in song.get("artist", "").lower():
                     self._log.debug(
-                        f"Potential match (score {score}):\n"
+                        f"Match found:\n"
                         f"Beets:    {item.artist} - {item.title} ({item.album})\n"
                         f"Subsonic: {song.get('artist', 'Unknown')} - {song['title']} ({song.get('album', 'Unknown')})"
                     )
-
-            # Sort by score and get the best match
-            if matches:
-                matches.sort(key=lambda x: x[1], reverse=True)
-                best_match, score = matches[0]
-                self._log.debug(
-                    f"Match found (score {score}):\n"
-                    f"Beets:    {item.artist} - {item.title} ({item.album})\n"
-                    f"Subsonic: {best_match.get('artist', 'Unknown')} - {best_match['title']} ({best_match.get('album', 'Unknown')})"
-                )
-                return best_match["id"]
+                    return song["id"]
 
         # Try a direct albumId approach as a fallback
         album_id = self.get_album_id_by_name(item.album, artist, payload)
@@ -377,7 +319,7 @@ class SubsonicPlugin(BeetsPlugin):
         self._log.warning(
             f"Could not find match for:\n"
             f"Title: {item.title}\n"
-            f"Artist: {artist}\n"
+            f"Artist: {item.artist}\n"
             f"Album: {item.album}"
         )
         return None
