@@ -285,11 +285,14 @@ class SubsonicPlugin(BeetsPlugin):
             lambda: f'{item.title.strip()} {item.album.strip()}', # title and album
         ]
 
+        # Keep track of all songs found across all search strategies
+        all_potential_matches = []
+
         for strategy in search_strategies:
             query = strategy()
             self._log.debug(f"Trying search query: {query}")
 
-            search_payload = {**payload, "query": query, "songCount": 20}
+            search_payload = {**payload, "query": query, "songCount": 30}  # Increased to 30
             json = self.send_request(url, search_payload)
 
             if not json:
@@ -300,13 +303,53 @@ class SubsonicPlugin(BeetsPlugin):
                 self._log.debug(f"No results found for query: {query}")
                 continue
 
-            # Try to find the best match among results
+            # Store all results for this search strategy
             for song in search_result["song"]:
+                all_potential_matches.append(song)
+
+                # First check for very strict match
+                if item.title.lower() == song["title"].lower():
+                    # Exact title match
+                    if artist.lower() in song.get("artist", "").lower() or item.album.lower() in song.get("album", "").lower():
+                        self._log.debug(
+                            f"Exact match found:\n"
+                            f"Beets:    {item.artist} - {item.title} ({item.album})\n"
+                            f"Subsonic: {song.get('artist', 'Unknown')} - {song['title']} ({song.get('album', 'Unknown')})"
+                        )
+                        return song["id"]
+
+                # Then check for looser match (title contained)
                 if (item.title.lower() in song["title"].lower() and
                     (artist.lower() in song.get("artist", "").lower() or
                      item.album.lower() in song.get("album", "").lower())):
                     self._log.debug(
                         f"Match found:\n"
+                        f"Beets:    {item.artist} - {item.title} ({item.album})\n"
+                        f"Subsonic: {song.get('artist', 'Unknown')} - {song['title']} ({song.get('album', 'Unknown')})"
+                    )
+                    return song["id"]
+
+        # If we get here, we didn't find a match with our normal criteria
+        # Try more lenient matching on the accumulated potential matches
+        if all_potential_matches:
+            self._log.debug(f"Trying more lenient matching on {len(all_potential_matches)} potential matches")
+
+            # Try just matching on title substring (most lenient)
+            for song in all_potential_matches:
+                title_normalized = item.title.lower().strip()
+                song_title_normalized = song["title"].lower().strip()
+
+                # Log all potential matches for debugging
+                self._log.debug(
+                    f"Potential match:\n"
+                    f"Beets:    {item.title}\n"
+                    f"Subsonic: {song['title']}"
+                )
+
+                # Check for title substring match (very lenient)
+                if title_normalized in song_title_normalized or song_title_normalized in title_normalized:
+                    self._log.info(
+                        f"Lenient match found:\n"
                         f"Beets:    {item.artist} - {item.title} ({item.album})\n"
                         f"Subsonic: {song.get('artist', 'Unknown')} - {song['title']} ({song.get('album', 'Unknown')})"
                     )
@@ -325,7 +368,7 @@ class SubsonicPlugin(BeetsPlugin):
             f"Title: {item.title}\n"
             f"Artist: {item.artist}\n"
             f"Album: {item.album}\n"
-            f"Search strategies tried: {[strategy().strip() for strategy in search_strategies]}"
+            f"Search strategies tried: {[strategy() for strategy in search_strategies]}"
         )
         return None
 
