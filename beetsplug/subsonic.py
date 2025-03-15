@@ -282,6 +282,7 @@ class SubsonicPlugin(BeetsPlugin):
             lambda: item.title,                    # just the title
             lambda: f'{artist} {item.album}',      # artist and album
             lambda: item.album,                    # just the album
+            lambda: f'{item.title} {item.album}',  # title and album
         ]
 
         for strategy in search_strategies:
@@ -301,7 +302,9 @@ class SubsonicPlugin(BeetsPlugin):
 
             # Try to find the best match among results
             for song in search_result["song"]:
-                if item.title.lower() in song["title"].lower() and artist.lower() in song.get("artist", "").lower():
+                if (item.title.lower() in song["title"].lower() and
+                    (artist.lower() in song.get("artist", "").lower() or
+                     item.album.lower() in song.get("album", "").lower())):
                     self._log.debug(
                         f"Match found:\n"
                         f"Beets:    {item.artist} - {item.title} ({item.album})\n"
