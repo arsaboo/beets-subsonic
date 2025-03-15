@@ -276,13 +276,13 @@ class SubsonicPlugin(BeetsPlugin):
 
         # Try different search strategies in order of efficiency
         search_strategies = [
-            lambda: f'"{item.title}" "{artist}"',  # exact title and full artist
-            lambda: f'"{item.title}"',             # exact title only
-            lambda: f'{item.title} {artist}',      # title and artist without quotes
-            lambda: item.title,                    # just the title
-            lambda: f'{artist} {item.album}',      # artist and album
-            lambda: item.album,                    # just the album
-            lambda: f'{item.title} {item.album}',  # title and album
+            lambda: f'"{item.title.strip()}"',                    # exact title only
+            lambda: item.title.strip(),                           # just the title
+            lambda: f'"{item.title.strip()}" "{artist.strip()}"',  # exact title and full artist
+            lambda: f'{item.title.strip()} {artist.strip()}',     # title and artist without quotes
+            lambda: f'{artist.strip()} {item.album.strip()}',     # artist and album
+            lambda: item.album.strip(),                           # just the album
+            lambda: f'{item.title.strip()} {item.album.strip()}', # title and album
         ]
 
         for strategy in search_strategies:
@@ -325,7 +325,7 @@ class SubsonicPlugin(BeetsPlugin):
             f"Title: {item.title}\n"
             f"Artist: {item.artist}\n"
             f"Album: {item.album}\n"
-            f"Search strategies tried: {[strategy() for strategy in search_strategies]}"
+            f"Search strategies tried: {[strategy().strip() for strategy in search_strategies]}"
         )
         return None
 
