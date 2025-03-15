@@ -214,14 +214,10 @@ class SubsonicPlugin(BeetsPlugin):
                         f"Server returned error 70 (data not found): {error_message}"
                     )
                     return None
-                self._log.error(
-                    f"Server returned error {error_code}: {error_message}"
-                )
+                self._log.error(f"Server returned error {error_code}: {error_message}")
                 return None
         except requests.exceptions.RequestException as error:
-            self._log.error(
-                f"RequestException occurred while sending request: {error}"
-            )
+            self._log.error(f"RequestException occurred while sending request: {error}")
             return None
         except ValueError as error:
             self._log.error(f"Invalid JSON response from server: {error}")
@@ -275,20 +271,26 @@ class SubsonicPlugin(BeetsPlugin):
         if payload is None:
             return None
 
-        # Try different search strategies in order of specificity
+        # Clean artist name to handle featuring artists and multiple artists
+        artist = item.artist.split(",")[0].strip() if "," in item.artist else item.artist
+
+        # Since title-only searches work well, start with the simplest strategy
         search_strategies = [
-            lambda: f'"{item.title}" "{item.artist}"',  # exact title and artist
-            lambda: f"{item.title} {item.artist}",  # title and artist
-            lambda: f'"{item.title}"',  # just title
-            lambda: item.title,  # title without quotes
-            lambda: f"{item.artist} {item.album}",  # new fallback
+            lambda: item.title.strip(),                           # just the title (most successful)
+            lambda: f'"{item.title.strip()}"',                    # exact title only
+            lambda: f'{item.title.strip()} {item.album.strip()}', # title and album
+            lambda: f'{artist.strip()} {item.title.strip()}',     # artist and title without quotes
+            lambda: item.album.strip(),                           # just the album (fallback)
         ]
+
+        # Store all songs found for lenient matching later
+        all_potential_matches = []
 
         for strategy in search_strategies:
             query = strategy()
             self._log.debug(f"Trying search query: {query}")
 
-            search_payload = {**payload, "query": query, "songCount": 10}
+            search_payload = {**payload, "query": query, "songCount": 20}
             json = self.send_request(url, search_payload)
 
             if not json:
@@ -299,23 +301,94 @@ class SubsonicPlugin(BeetsPlugin):
                 self._log.debug(f"No results found for query: {query}")
                 continue
 
-            # Try to find the best match among results
+            # Process the results
             for song in search_result["song"]:
-                # Check if title matches (case-insensitive)
-                if item.title.lower() in song["title"].lower():
+                all_potential_matches.append(song)
+
+                # Try for exact match first
+                if item.title.lower() == song["title"].lower():
                     self._log.debug(
-                        f"Match found:\n"
-                        f"Beets:    {item.artist} - {item.title}\n"
-                        f"Subsonic: {song['artist']} - {song['title']}"
+                        f"Exact title match found:\n"
+                        f"Beets:    {item.artist} - {item.title} ({item.album})\n"
+                        f"Subsonic: {song.get('artist', 'Unknown')} - {song['title']} ({song.get('album', 'Unknown')})"
                     )
                     return song["id"]
 
+        # If we haven't found an exact match, try lenient matching on all potential matches
+        if all_potential_matches:
+            # Sort by normalized edit distance to find closest match
+            self._log.debug(f"Trying lenient matching on {len(all_potential_matches)} potential matches")
+
+            for song in all_potential_matches:
+                title_normalized = item.title.lower().strip()
+                song_title_normalized = song["title"].lower().strip()
+
+                # Check for title substring in either direction
+                if title_normalized in song_title_normalized or song_title_normalized in title_normalized:
+                    self._log.debug(
+                        f"Lenient match found:\n"
+                        f"Beets:    {item.artist} - {item.title} ({item.album})\n"
+                        f"Subsonic: {song.get('artist', 'Unknown')} - {song['title']} ({song.get('album', 'Unknown')})"
+                    )
+                    return song["id"]
+
+        # Try album search as final fallback
+        album_id = self.get_album_id_by_name(item.album, artist, payload)
+        if album_id:
+            song_id = self.find_song_in_album(album_id, item.title, payload)
+            if song_id:
+                return song_id
+
         self._log.warning(
-            f"Could not find match (even with album) for:\n"
+            f"Could not find match for:\n"
             f"Title: {item.title}\n"
             f"Artist: {item.artist}\n"
             f"Album: {item.album}"
         )
+        return None
+
+    def get_album_id_by_name(self, album_name, artist_name, payload):
+        """
+        Try to find an album ID by name and artist
+        """
+        url = self.__format_url("search3")
+        search_payload = {**payload, "query": album_name, "albumCount": 10}
+        json = self.send_request(url, search_payload)
+
+        if not json:
+            return None
+
+        search_result = json["subsonic-response"].get("searchResult3", {})
+        if "album" not in search_result:
+            return None
+
+        for album in search_result["album"]:
+            if album_name.lower() in album["name"].lower():
+                self._log.debug(f"Found album match: {album['name']}")
+                return album["id"]
+
+        return None
+
+    def find_song_in_album(self, album_id, song_title, payload):
+        """
+        Find a song within an album by title
+        """
+        url = self.__format_url("getAlbum")
+        album_payload = {**payload, "id": album_id}
+        json = self.send_request(url, album_payload)
+
+        if not json:
+            return None
+
+        album_data = json["subsonic-response"].get("album", {})
+        if "song" not in album_data:
+            return None
+
+        for song in album_data["song"]:
+            if song_title.lower() in song["title"].lower():
+                self._log.debug(f"Found song in album: {song['title']}")
+                return song["id"]
+
         return None
 
     def update_rating(self, item, url, payload, rating_field):
@@ -335,9 +408,7 @@ class SubsonicPlugin(BeetsPlugin):
         """
         id = getattr(item, "subsonic_id", None)
         if id is None:
-            self._log.debug(
-                f"No subsonic_id found for {item}, attempting to fetch it"
-            )
+            self._log.debug(f"No subsonic_id found for {item}, attempting to fetch it")
             id = self.get_song_id(item)
             if id is None:
                 self._log.error(
@@ -444,8 +515,7 @@ class SubsonicPlugin(BeetsPlugin):
             payload = {
                 **payload,
                 "id": id,
-                "time": int(item.plex_lastviewedat)
-                * 1000,  # convert to milliseconds
+                "time": int(item.plex_lastviewedat) * 1000,  # convert to milliseconds
             }
         except AttributeError:
             self._log.debug("No scrobble time found for: {}", item)
