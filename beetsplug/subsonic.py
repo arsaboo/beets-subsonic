@@ -325,7 +325,7 @@ class SubsonicPlugin(BeetsPlugin):
 
                 # Check for title substring in either direction
                 if title_normalized in song_title_normalized or song_title_normalized in title_normalized:
-                    self._log.info(
+                    self._log.debug(
                         f"Lenient match found:\n"
                         f"Beets:    {item.artist} - {item.title} ({item.album})\n"
                         f"Subsonic: {song.get('artist', 'Unknown')} - {song['title']} ({song.get('album', 'Unknown')})"
