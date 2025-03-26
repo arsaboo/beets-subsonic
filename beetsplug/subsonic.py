@@ -8,11 +8,11 @@ import string
 from binascii import hexlify
 
 import requests
+import enlighten
 
 from beets import config, ui
 from beets.plugins import BeetsPlugin
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from tqdm import tqdm
 
 
 class SubsonicPlugin(BeetsPlugin):
@@ -253,14 +253,19 @@ class SubsonicPlugin(BeetsPlugin):
 
     def subsonic_get_ids(self, items, force):
         """Get subsonic_id for items"""
+        manager = enlighten.get_manager()
         with ThreadPoolExecutor(max_workers=self.MAX_WORKERS) as executor:
-            for item in tqdm(items, total=len(items)):
+            counter = manager.counter(total=len(items), desc='Getting IDs', unit='items')
+            for item in items:
                 if not force and hasattr(item, "subsonic_id"):
                     self._log.debug("subsonic_id already present for: {}", item)
+                    counter.update()
                     continue
                 future = executor.submit(self.get_song_id, item)
                 item.subsonic_id = future.result()
                 item.store()
+                counter.update()
+            counter.close()
 
     def get_song_id(self, item):
         """
@@ -469,18 +474,17 @@ class SubsonicPlugin(BeetsPlugin):
         if payload is None:
             return
 
+        manager = enlighten.get_manager()
         with ThreadPoolExecutor(max_workers=self.MAX_WORKERS) as executor:
-            list(
-                tqdm(
-                    executor.map(
-                        lambda item: self.update_rating(
-                            item, url, payload, rating_field
-                        ),
-                        items,
-                    ),
-                    total=len(items),
-                )
-            )
+            counter = manager.counter(total=len(items), desc='Updating ratings', unit='items')
+            futures = []
+            for item in items:
+                future = executor.submit(self.update_rating, item, url, payload, rating_field)
+                futures.append(future)
+
+            for future in as_completed(futures):
+                counter.update()
+            counter.close()
 
     def subsonic_scrobble(self, items):
         url = self.__format_url("scrobble")
@@ -488,8 +492,13 @@ class SubsonicPlugin(BeetsPlugin):
         if payload is None:
             return
 
-        for item in tqdm(items, total=len(items)):
+        manager = enlighten.get_manager()
+        counter = manager.counter(total=len(items), desc='Scrobbling', unit='items')
+
+        for item in items:
             self.scrobble(item, url, payload)
+            counter.update()
+        counter.close()
 
     def scrobble(self, item, url, payload):
         """
