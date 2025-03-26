@@ -14,6 +14,6 @@ setup(
     install_requires=[
         'beets>=1.6.0',
         'requests',
-        'tqdm'
+        'enlighten',
     ],
 )
