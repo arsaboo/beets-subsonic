@@ -226,6 +226,23 @@ class SubsonicPlugin(BeetsPlugin):
     def close(self):
         self.session.close()
 
+    # Metadata plugin methods - return None to indicate this plugin doesn't provide metadata
+    def album_for_id(self, album_id):
+        """Return None to indicate this plugin doesn't provide album metadata."""
+        return None
+
+    def track_for_id(self, track_id):
+        """Return None to indicate this plugin doesn't provide track metadata."""
+        return None
+
+    def candidates(self, items, artist, album, va_likely, extra_tags=None):
+        """Return empty list to indicate this plugin doesn't provide album candidates."""
+        return []
+
+    def item_candidates(self, item, artist, title):
+        """Return empty list to indicate this plugin doesn't provide item candidates."""
+        return []
+
     def start_scan(self):
         """Start a scan of the Subsonic library."""
         try:
