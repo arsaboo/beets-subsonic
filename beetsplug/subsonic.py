@@ -68,7 +68,8 @@ class SubsonicPlugin(BeetsPlugin):
         subsonicaddrating_cmd.parser.add_option(
             "--rating",
             dest="rating",
-            action="store_true",
+            action="store",
+            type="string",
             default="plex_userrating",
             help=(
                 "Specify the rating field to be used for updating Subsonic ratings. "
@@ -226,6 +227,23 @@ class SubsonicPlugin(BeetsPlugin):
     def close(self):
         self.session.close()
 
+    # Metadata plugin methods - return None to indicate this plugin doesn't provide metadata
+    def album_for_id(self, album_id):
+        """Return None to indicate this plugin doesn't provide album metadata."""
+        return None
+
+    def track_for_id(self, track_id):
+        """Return None to indicate this plugin doesn't provide track metadata."""
+        return None
+
+    def candidates(self, items, artist, album, va_likely, extra_tags=None):
+        """Return empty list to indicate this plugin doesn't provide album candidates."""
+        return []
+
+    def item_candidates(self, item, artist, title):
+        """Return empty list to indicate this plugin doesn't provide item candidates."""
+        return []
+
     def start_scan(self):
         """Start a scan of the Subsonic library."""
         try:
@@ -253,13 +271,35 @@ class SubsonicPlugin(BeetsPlugin):
 
     def subsonic_get_ids(self, items, force):
         """Get subsonic_id for items"""
+        items_to_process = []
+        for item in items:
+            current_id = getattr(item, "subsonic_id", None)
+            if not force and current_id:
+                self._log.debug("subsonic_id already present for: {}", item)
+                continue
+            items_to_process.append(item)
+
+        if not items_to_process:
+            self._log.debug("No items queued for subsonic_id lookup")
+            return
+
         with ThreadPoolExecutor(max_workers=self.MAX_WORKERS) as executor:
-            for item in tqdm(items, total=len(items)):
-                if not force and hasattr(item, "subsonic_id"):
-                    self._log.debug("subsonic_id already present for: {}", item)
+            future_to_item = {
+                executor.submit(self.get_song_id, item): item
+                for item in items_to_process
+            }
+            for future in tqdm(
+                as_completed(future_to_item),
+                total=len(future_to_item),
+            ):
+                item = future_to_item[future]
+                try:
+                    result = future.result()
+                except Exception as error:
+                    self._log.error(f"Failed to fetch Subsonic ID for {item}: {error}")
                     continue
-                future = executor.submit(self.get_song_id, item)
-                item.subsonic_id = future.result()
+
+                item.subsonic_id = result
                 item.store()
 
     def get_song_id(self, item):
@@ -525,3 +565,4 @@ class SubsonicPlugin(BeetsPlugin):
             self._log.debug(f"Scrobbled {item}")
         else:
             self._log.error("Error scrobbling")
+
