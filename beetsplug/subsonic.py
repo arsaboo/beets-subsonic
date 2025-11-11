@@ -528,24 +528,13 @@ class SubsonicPlugin(BeetsPlugin):
         if payload is None:
             return
 
-        # Load previously scrobbled timestamps from item attributes
-        scrobbled_timestamps = set()
-        for item in items:
+        for item in tqdm(items, total=len(items)):
+            # Check if we have a plex_lastviewedat attribute to use as timestamp
             try:
                 timestamp = int(item.plex_lastviewedat)
                 # Check if this item has already been scrobbled based on a flag
                 if hasattr(item, 'subsonic_scrobbled') and item.subsonic_scrobbled == 'true':
                     self._log.debug(f"Skipping already scrobbled item: {item}")
-                    scrobbled_timestamps.add(timestamp)
-            except AttributeError:
-                continue
-
-        for item in tqdm(items, total=len(items)):
-            # Check if we have a plex_lastviewedat attribute to use as timestamp
-            try:
-                timestamp = int(item.plex_lastviewedat)
-                if timestamp in scrobbled_timestamps:
-                    self._log.debug(f"Skipping duplicate scrobble for {item} at timestamp {timestamp}")
                     continue
                 self.scrobble(item, url, payload, timestamp)
                 # Mark the item as scrobbled
@@ -554,6 +543,10 @@ class SubsonicPlugin(BeetsPlugin):
             except AttributeError:
                 # If no plex_lastviewedat, scrobble normally without deduplication
                 self._log.debug("No scrobble time found for: {}", item)
+                # Still check if item was already scrobbled even without timestamp
+                if hasattr(item, 'subsonic_scrobbled') and item.subsonic_scrobbled == 'true':
+                    self._log.debug(f"Skipping already scrobbled item: {item}")
+                    continue
                 self.scrobble(item, url, payload)
                 # Mark the item as scrobbled even without timestamp
                 item.subsonic_scrobbled = 'true'
