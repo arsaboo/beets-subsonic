@@ -528,10 +528,24 @@ class SubsonicPlugin(BeetsPlugin):
         if payload is None:
             return
 
-        for item in tqdm(items, total=len(items)):
-            self.scrobble(item, url, payload)
+        # Track timestamps that have already been scrobbled to avoid duplicates
+        scrobbled_timestamps = set()
 
-    def scrobble(self, item, url, payload):
+        for item in tqdm(items, total=len(items)):
+            # Check if we have a plex_lastviewedat attribute to use as timestamp
+            try:
+                timestamp = int(item.plex_lastviewedat)
+                if timestamp in scrobbled_timestamps:
+                    self._log.debug(f"Skipping duplicate scrobble for {item} at timestamp {timestamp}")
+                    continue
+                scrobbled_timestamps.add(timestamp)
+                self.scrobble(item, url, payload, timestamp)
+            except AttributeError:
+                # If no plex_lastviewedat, scrobble normally without deduplication
+                self._log.debug("No scrobble time found for: {}", item)
+                self.scrobble(item, url, payload)
+
+    def scrobble(self, item, url, payload, timestamp=None):
         """
         Scrobble an item to the Subsonic server.
 
@@ -539,6 +553,7 @@ class SubsonicPlugin(BeetsPlugin):
             item: The item to scrobble.
             url: The URL of the Subsonic server.
             payload: Additional parameters to include in the request.
+            timestamp: Optional timestamp to use for scrobbling (in seconds).
 
         Returns:
             None
@@ -552,12 +567,18 @@ class SubsonicPlugin(BeetsPlugin):
         else:
             id = item.subsonic_id
         try:
+            if timestamp is not None:
+                # Use the provided timestamp
+                scrobble_timestamp = timestamp
+            else:
+                # Fallback to extracting from item
+                scrobble_timestamp = int(item.plex_lastviewedat)
             payload = {
                 **payload,
                 "id": id,
-                "time": int(item.plex_lastviewedat) * 1000,  # convert to milliseconds
+                "time": scrobble_timestamp * 1000,  # convert to milliseconds
             }
-        except AttributeError:
+        except (AttributeError, TypeError):
             self._log.debug("No scrobble time found for: {}", item)
             return
         json = self.send_request(url, payload)
