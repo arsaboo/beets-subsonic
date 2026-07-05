@@ -448,7 +448,7 @@ class SubsonicPlugin(BeetsPlugin):
 
         return None
 
-    def update_rating(self, item, url, payload, rating_field):
+    def update_rating(self, item, url, payload, rating_field, album_cache=None):
         """Update the rating of an item on the Subsonic server.
 
         Returns a status string: "updated", "missing", "no_rating",
@@ -456,7 +456,7 @@ class SubsonicPlugin(BeetsPlugin):
         """
         id = getattr(item, "subsonic_id", None)
         if id is None:
-            id = self.get_song_id(item)
+            id = self.get_song_id(item, payload, album_cache)
             if id is None:
                 return "missing"
 
@@ -475,11 +475,13 @@ class SubsonicPlugin(BeetsPlugin):
             return "updated"
 
         if status == "not_found":
-            new_id = self.get_song_id(item)
+            new_id = self.get_song_id(item, payload, album_cache)
             if new_id and new_id != id:
                 request_payload["id"] = new_id
                 status, _ = self.send_request(url, request_payload)
                 if status == "ok":
+                    item.subsonic_id = new_id
+                    item.store()
                     return "stale_recovered"
 
         return "request_failed"
@@ -511,12 +513,14 @@ class SubsonicPlugin(BeetsPlugin):
         if payload is None:
             return
 
+        album_cache = {}
+
         with ThreadPoolExecutor(max_workers=self.MAX_WORKERS) as executor:
             results = list(
                 tqdm(
                     executor.map(
                         lambda item: self.update_rating(
-                            item, url, payload, rating_field
+                            item, url, payload, rating_field, album_cache
                         ),
                         items,
                     ),
@@ -546,14 +550,28 @@ class SubsonicPlugin(BeetsPlugin):
         if payload is None:
             return
 
-        for item in tqdm(items, total=len(items)):
-            self.scrobble(item, url, payload)
+        album_cache = {}
 
-    def scrobble(self, item, url, payload):
-        if not hasattr(item, "subsonic_id"):
-            id = self.get_song_id(item)
-        else:
-            id = item.subsonic_id
+        with ThreadPoolExecutor(max_workers=self.MAX_WORKERS) as executor:
+            list(
+                tqdm(
+                    executor.map(
+                        lambda item: self.scrobble(
+                            item, url, payload, album_cache
+                        ),
+                        items,
+                    ),
+                    total=len(items),
+                )
+            )
+
+    def scrobble(self, item, url, payload, album_cache=None):
+        id = getattr(item, "subsonic_id", None)
+        if id is None:
+            id = self.get_song_id(item, payload, album_cache)
+            if id is None:
+                self._log.debug("No subsonic_id found for: {}", item)
+                return
         try:
             payload = {
                 **payload,
