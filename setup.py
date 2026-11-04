@@ -12,7 +12,7 @@ setup(
     platforms='ALL',
     packages=['beetsplug'],
     install_requires=[
-        'beets>=1.6.0',
+        'beets>=2.6.0',
         'requests',
         'tqdm'
     ],
