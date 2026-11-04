@@ -23,7 +23,7 @@ class SubsonicPlugin(BeetsPlugin):
     """Subsonic plugin for Beets."""
 
     data_source = "Subsonic"
-    MAX_WORKERS = 3
+    MAX_WORKERS = 20
     item_types: ClassVar[dict[str, types.Type]] = {
         "subsonic_id": types.STRING,
     }
@@ -270,9 +270,15 @@ class SubsonicPlugin(BeetsPlugin):
             self._log.debug("No items queued for subsonic_id lookup")
             return
 
+        auth_payload = self.authenticate()
+        if auth_payload is None:
+            return
+
+        album_cache = {}
+
         with ThreadPoolExecutor(max_workers=self.MAX_WORKERS) as executor:
             future_to_item = {
-                executor.submit(self.get_song_id, item): item
+                executor.submit(self.get_song_id, item, auth_payload, album_cache): item
                 for item in items_to_process
             }
             for future in tqdm(
@@ -320,23 +326,22 @@ class SubsonicPlugin(BeetsPlugin):
         )
         return best
 
-    def get_song_id(self, item):
+    def get_song_id(self, item, auth_payload=None, album_cache=None):
         """
         Retrieves the ID of a song from the Subsonic server using multiple search strategies.
         """
+        if auth_payload is None:
+            auth_payload = self.authenticate()
+            if auth_payload is None:
+                return None
+
         url = self.__format_url("search3")
-        payload = self.authenticate()
-        if payload is None:
-            return None
 
         artist = item.artist.split(",")[0].strip() if "," in item.artist else item.artist
 
         search_strategies = [
-            lambda: item.title.strip(),
-            lambda: f'"{item.title.strip()}"',
-            lambda: f'{item.title.strip()} {item.album.strip()}',
             lambda: f'{artist.strip()} {item.title.strip()}',
-            lambda: item.album.strip(),
+            lambda: f'{item.title.strip()} {item.album.strip()}',
         ]
 
         all_potential_matches = []
@@ -345,7 +350,7 @@ class SubsonicPlugin(BeetsPlugin):
             query = strategy()
             self._log.debug(f"Trying search query: {query}")
 
-            search_payload = {**payload, "query": query, "songCount": 20}
+            search_payload = {**auth_payload, "query": query, "songCount": 500}
             status, json = self.send_request(url, search_payload)
 
             if status != "ok":
@@ -381,11 +386,19 @@ class SubsonicPlugin(BeetsPlugin):
                     )
                     return song["id"]
 
-        album_id = self.get_album_id_by_name(item.album, artist, payload)
-        if album_id:
-            song_id = self.find_song_in_album(album_id, item.title, payload)
-            if song_id:
-                return song_id
+        if item.album:
+            album_key = (item.album, artist)
+            if album_cache is not None and album_key in album_cache:
+                album_id = album_cache[album_key]
+            else:
+                album_id = self.get_album_id_by_name(item.album, artist, auth_payload)
+                if album_cache is not None:
+                    album_cache[album_key] = album_id
+
+            if album_id:
+                song_id = self.find_song_in_album(album_id, item.title, auth_payload)
+                if song_id:
+                    return song_id
 
         self._log.warning(
             f"Could not find match for:\n"
@@ -435,7 +448,7 @@ class SubsonicPlugin(BeetsPlugin):
 
         return None
 
-    def update_rating(self, item, url, payload, rating_field):
+    def update_rating(self, item, url, payload, rating_field, album_cache=None):
         """Update the rating of an item on the Subsonic server.
 
         Returns a status string: "updated", "missing", "no_rating",
@@ -443,7 +456,7 @@ class SubsonicPlugin(BeetsPlugin):
         """
         id = getattr(item, "subsonic_id", None)
         if id is None:
-            id = self.get_song_id(item)
+            id = self.get_song_id(item, payload, album_cache)
             if id is None:
                 return "missing"
 
@@ -462,11 +475,13 @@ class SubsonicPlugin(BeetsPlugin):
             return "updated"
 
         if status == "not_found":
-            new_id = self.get_song_id(item)
+            new_id = self.get_song_id(item, payload, album_cache)
             if new_id and new_id != id:
                 request_payload["id"] = new_id
                 status, _ = self.send_request(url, request_payload)
                 if status == "ok":
+                    item.subsonic_id = new_id
+                    item.store()
                     return "stale_recovered"
 
         return "request_failed"
@@ -498,12 +513,14 @@ class SubsonicPlugin(BeetsPlugin):
         if payload is None:
             return
 
+        album_cache = {}
+
         with ThreadPoolExecutor(max_workers=self.MAX_WORKERS) as executor:
             results = list(
                 tqdm(
                     executor.map(
                         lambda item: self.update_rating(
-                            item, url, payload, rating_field
+                            item, url, payload, rating_field, album_cache
                         ),
                         items,
                     ),
@@ -533,14 +550,28 @@ class SubsonicPlugin(BeetsPlugin):
         if payload is None:
             return
 
-        for item in tqdm(items, total=len(items)):
-            self.scrobble(item, url, payload)
+        album_cache = {}
 
-    def scrobble(self, item, url, payload):
-        if not hasattr(item, "subsonic_id"):
-            id = self.get_song_id(item)
-        else:
-            id = item.subsonic_id
+        with ThreadPoolExecutor(max_workers=self.MAX_WORKERS) as executor:
+            list(
+                tqdm(
+                    executor.map(
+                        lambda item: self.scrobble(
+                            item, url, payload, album_cache
+                        ),
+                        items,
+                    ),
+                    total=len(items),
+                )
+            )
+
+    def scrobble(self, item, url, payload, album_cache=None):
+        id = getattr(item, "subsonic_id", None)
+        if id is None:
+            id = self.get_song_id(item, payload, album_cache)
+            if id is None:
+                self._log.debug("No subsonic_id found for: {}", item)
+                return
         try:
             payload = {
                 **payload,
