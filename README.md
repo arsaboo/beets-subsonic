@@ -3,6 +3,8 @@ A plugin for [beets](https://github.com/beetbox/beets) to sync with Subsonic ser
 
 ## Installation
 
+Requires beets 2.6 or newer.
+
 Install the plugin using `pip`:
 
 ```shell
